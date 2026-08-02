@@ -1,0 +1,22 @@
+  const handleToggleActive = async (id: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'inactive' ? 'active' : 'inactive';
+    try {
+      await updateDoc(doc(db, 'employees', id), { status: nextStatus });
+      toast.success(nextStatus === 'inactive' ? 'تم تعطيل حساب الموظف' : 'تم تفعيل حساب الموظف بنجاح');
+    } catch (e) {
+      toast.error('فشل تحديث حالة الموظف');
+    }
+  };
+
+  const handleResetPassword = async (email: string) => {
+    try {
+      if (!email) {
+        toast.error('لا يوجد بريد إلكتروني مسجل لهذا الموظف');
+        return;
+      }
+      await sendPasswordResetEmail(auth, email);
+      toast.success(`تم إرسال رابط إعادة تعيين كلمة المرور إلى ${email}`);
+    } catch (e) {
+      toast.error('فشل إرسال رابط إعادة تعيين كلمة المرور');
+    }
+  };

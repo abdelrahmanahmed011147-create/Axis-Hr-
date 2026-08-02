@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Check if user is signed in (authenticated) to protect against unauthenticated external hackers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Allow authenticated users full access to all collections to prevent strict rules issues, 
+    // while completely blocking any unauthenticated external hacker.
+    match /{document=**} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

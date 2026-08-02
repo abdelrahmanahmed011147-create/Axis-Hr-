@@ -1,0 +1,36 @@
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      toast.error('الرجاء إدخال البريد الإلكتروني وكلمة المرور');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+        if (email.trim().toLowerCase() === 'abdelrahmanahmed011147@gmail.com'.toLowerCase()) {
+          try {
+            const { createUserWithEmailAndPassword } = await import('firebase/auth');
+            await createUserWithEmailAndPassword(auth, email.trim(), password);
+            toast.success('تم إنشاء حساب المدير العام وتسجيل الدخول بنجاح');
+            return;
+          } catch (createErr: any) {
+            console.error('Master admin creation error:', createErr);
+            toast.error('فشل إنشاء حساب المدير العام: ' + createErr.message);
+          }
+        } else {
+          toast.error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+        }
+      } else if (error.code === 'auth/wrong-password') {
+        toast.error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      } else if (error.code === 'auth/too-many-requests') {
+        toast.error('محاولات كثيرة خاطئة، يرجى المحاولة لاحقاً أو إعادة تعيين كلمة المرور');
+      } else {
+        toast.error('حدث خطأ أثناء تسجيل الدخول: ' + error.message);
+      }
+      setLoading(false);
+    }
+  };

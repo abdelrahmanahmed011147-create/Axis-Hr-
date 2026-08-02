@@ -1,0 +1,19 @@
+                            <button
+                              onClick={() => handleResetPassword(emp.email)}
+                              className="inline-flex items-center justify-center p-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/10 rounded-xl text-yellow-400 hover:text-yellow-300 transition-all"
+                              title="إرسال رابط إعادة تعيين كلمة المرور"
+                            >
+                              <KeyRound size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleToggleActive(emp.id, emp.status)}
+                              className={cn(
+                                "inline-flex items-center justify-center p-2.5 rounded-xl border transition-all",
+                                emp.status === 'inactive'
+                                  ? "bg-green-500/10 hover:bg-green-500/20 border-green-500/20 text-green-400 hover:text-green-300"
+                                  : "bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/10 text-orange-400 hover:text-orange-300"
+                              )}
+                              title={emp.status === 'inactive' ? "تفعيل الموظف" : "تعطيل الموظف"}
+                            >
+                              {emp.status === 'inactive' ? <Power size={16} /> : <PowerOff size={16} />}
+                            </button>

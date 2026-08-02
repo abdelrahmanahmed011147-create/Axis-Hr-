@@ -1,0 +1,162 @@
+{
+  "entities": {
+    "Employee": {
+      "title": "Employee",
+      "description": "Represents an employee in the system",
+      "type": "object",
+      "properties": {
+        "roleCode": { "type": "string" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["EMPLOYEE", "HR-MASTER", "GM-MASTER"] },
+        "company": { "type": "string" },
+        "department": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roleCode", "fullName", "role", "company", "department", "jobTitle", "status"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Represents daily attendance records",
+      "type": "object",
+      "properties": {
+        "roleCode": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "checkInTime": { "type": "string", "format": "date-time" },
+        "checkOutTime": { "type": "string", "format": "date-time" },
+        "delayMinutes": { "type": "integer" },
+        "deductionValue": { "type": "number" },
+        "deductionReason": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roleCode", "date", "status"]
+    },
+    "Request": {
+      "title": "Request",
+      "description": "Represents a request (leave, permission, remote) from an employee",
+      "type": "object",
+      "properties": {
+        "roleCode": { "type": "string" },
+        "type": { "type": "string", "enum": ["permission", "vacation_regular", "vacation_sick", "remote"] },
+        "date": { "type": "string", "format": "date" },
+        "fromDate": { "type": "string", "format": "date" },
+        "toDate": { "type": "string", "format": "date" },
+        "fromTime": { "type": "string" },
+        "toTime": { "type": "string" },
+        "hours": { "type": "number" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "adminComment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["roleCode", "type", "status", "createdAt"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "System settings",
+      "type": "object",
+      "properties": {
+        "workStartTime": { "type": "string" },
+        "workEndTime": { "type": "string" },
+        "breakStartTime": { "type": "string" },
+        "breakEndTime": { "type": "string" },
+        "graceMinutes": { "type": "integer" },
+        "monthlyPermissionHours": { "type": "integer" },
+        "permissionOverLimit": { "type": "integer" },
+        "deductionRules": { "type": "object" },
+        "companies": { "type": "array", "items": { "type": "string" } },
+        "departments": { "type": "array", "items": { "type": "string" } },
+        "jobTitles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "KPICriterion": {
+      "title": "KPICriterion",
+      "description": "A single KPI criteria with weight",
+      "type": "object",
+      "properties": {
+        "category": { "type": "string", "enum": ["Tech", "HR"] },
+        "name": { "type": "string" },
+        "weight": { "type": "integer" }
+      },
+      "required": ["category", "name", "weight"]
+    },
+    "KpiConfig": {
+      "title": "KpiConfig",
+      "description": "KPI configuration per department",
+      "type": "object",
+      "properties": {
+        "departmentName": { "type": "string" },
+        "criteria": { "type": "array", "items": { "$ref": "#/entities/KPICriterion" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["departmentName", "criteria"]
+    },
+    "KpiEvaluation": {
+      "title": "KpiEvaluation",
+      "description": "An employee evaluation record for a month",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "roleCode": { "type": "string" },
+        "department": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "month": { "type": "string" },
+        "scores": { "type": "object" },
+        "totalScore": { "type": "number" },
+        "evaluatedBy": { "type": "string" },
+        "evaluatedByUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Done", "Pending"] }
+      },
+      "required": ["employeeId", "employeeName", "roleCode", "department", "jobTitle", "month", "scores", "totalScore"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Logs for administrative actions",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "roleCode": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "details": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "employees": {
+      "schema": "Employee",
+      "description": "Employee database"
+    },
+    "attendance": {
+      "schema": "Attendance",
+      "description": "Attendance history"
+    },
+    "requests": {
+      "schema": "Request",
+      "description": "Leave and permission requests"
+    },
+    "settings": {
+      "schema": "Setting",
+      "description": "System configuration"
+    },
+    "auditLogs": {
+      "schema": "AuditLog",
+      "description": "Admin action logs"
+    },
+    "kpiConfigs": {
+      "schema": "KpiConfig",
+      "description": "KPI customized templates per department"
+    },
+    "kpiEvaluations": {
+      "schema": "KpiEvaluation",
+      "description": "Employee monthly evaluation records"
+    }
+  }
+}

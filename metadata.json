@@ -1,0 +1,6 @@
+{
+  "name": "AXIS GROUP HR SYSTEM",
+  "description": "Professional HR management system for Axis Group with employee portal, attendance tracking, and administrative dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
