@@ -453,7 +453,6 @@ export const EmployeeAttendanceView: React.FC = () => {
             <thead>
               <tr className="border-b border-white/5 bg-white/[0.01]">
                 <th className="py-6 px-8 text-[11px] text-[#A78BFA] font-black uppercase tracking-[0.1em]">التاريخ</th>
-                <th className="py-6 px-6 text-[11px] text-[#A78BFA] font-black uppercase tracking-[0.1em] text-center">نوع الشيفت</th>
                 <th className="py-6 px-6 text-[11px] text-[#A78BFA] font-black uppercase tracking-[0.1em] text-center">وقت الحضور</th>
                 <th className="py-6 px-6 text-[11px] text-[#A78BFA] font-black uppercase tracking-[0.1em] text-center">وقت الانصراف</th>
                 <th className="py-6 px-6 text-[11px] text-[#A78BFA] font-black uppercase tracking-[0.1em] text-center">حالة الحضور</th>
@@ -465,7 +464,7 @@ export const EmployeeAttendanceView: React.FC = () => {
             <tbody>
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-24 text-center">
+                  <td colSpan={7} className="py-24 text-center">
                     <div className="max-w-md mx-auto space-y-4">
                       <Info size={48} className="mx-auto text-[#7C3AED] opacity-40 animate-bounce" />
                       <h5 className="text-lg font-bold text-white">لا توجد حركات مسجلة</h5>
@@ -487,13 +486,6 @@ export const EmployeeAttendanceView: React.FC = () => {
                       {/* Date */}
                       <td className="py-6 px-8">
                         <span className="font-black text-white font-mono">{log.date}</span>
-                      </td>
-
-                      {/* Shift Type */}
-                      <td className="py-6 px-6 text-center">
-                        <span className="text-xs font-bold text-[#E2B765] bg-[#E2B765]/10 px-3 py-1.5 rounded-lg">
-                          {log.shift === 'evening' ? 'مسائي' : 'صباحي'}
-                        </span>
                       </td>
 
                       {/* Check-In Time */}

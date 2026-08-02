@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -10,10 +10,14 @@ export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestore
   : getFirestore(app);
 export const auth = getAuth(app);
 
-// Enable local persistence for Auth
-setPersistence(auth, browserLocalPersistence).catch((error) => {
-  console.error("Error setting persistence:", error);
-});
+export const getGoogleProvider = () => {
+  try {
+    return new GoogleAuthProvider();
+  } catch (e) {
+    console.error("Failed to construct GoogleAuthProvider", e);
+    throw e;
+  }
+};
 
 export enum OperationType {
   CREATE = 'create',

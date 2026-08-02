@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, doc, updateDoc, serverTimestamp, deleteDoc, getDocs, writeBatch, setDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import { sendPasswordResetEmail } from 'firebase/auth';
+import { collection, onSnapshot, query, where, doc, updateDoc, serverTimestamp, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import ExcelJS from 'exceljs';
 import { Employee, Settings as SettingsType } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +18,8 @@ import {
   ChevronUp, 
   Building, 
   Briefcase, 
-    CheckCircle2, 
+  ShieldAlert, 
+  CheckCircle2, 
   Clock, 
   Lock, 
   Archive, 
@@ -36,14 +36,9 @@ import {
   CheckCircle,
   XCircle,
   Save,
-  Shield,
-  Power,
-  KeyRound,
-  PowerOff,
-  UserPlus,
+  Shield
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { AddEmployeeModal } from './AddEmployeeModal';
 
 const getNextEmployeeCode = (employees: Employee[], offset: number = 0) => {
   let maxNum = 4; // So the next one starts at 5 (AXIS-005)
@@ -68,14 +63,13 @@ const getNextEmployeeCode = (employees: Employee[], offset: number = 0) => {
 };
 
 export const EmployeesDirectoryView: React.FC = () => {
-  const { isAdmin, isSuperAdmin, loading: authLoading, profile } = useAuth();
+  const { isAdmin, loading: authLoading } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [showAddModal, setShowAddModal] = useState(false);
   const [settings, setSettings] = useState<SettingsType | null>(null);
   const [loading, setLoading] = useState(true);
 
   // High-level navigation tab: 'directory' (بيانات الموظفين) or 'pending' (قيد الانتظار للتفعيل)
-  const [activeTab, setActiveTab] = useState<'directory'>('directory');
+  const [activeTab, setActiveTab] = useState<'directory' | 'pending'>('directory');
 
   // Search & Filters state for Directory tab
   const [searchTerm, setSearchTerm] = useState('');
@@ -164,7 +158,8 @@ export const EmployeesDirectoryView: React.FC = () => {
 
   // Stats calculation
   const activeCount = employees.filter(e => e.status === 'active').length;
-    const lockedCount = employees.filter(e => e.status === 'locked' || e.status === 'inactive').length;
+  const pendingCount = employees.filter(e => e.status === 'pending').length;
+  const lockedCount = employees.filter(e => e.status === 'locked' || e.status === 'inactive').length;
   const totalCount = employees.filter(e => e.status === 'active').length;
 
   // Fetch unique companies & departments for automatic filter options
@@ -215,7 +210,7 @@ export const EmployeesDirectoryView: React.FC = () => {
     const matchesCompletion = 
       completionFilter === 'all' ||
       (completionFilter === 'completed' && emp.dataCompleted === true) ||
-      false;
+      (completionFilter === 'pending' && emp.dataCompleted !== true);
 
     return matchesSearch && matchesStatus && matchesCompany && matchesDept && matchesCompletion;
   });
@@ -326,29 +321,6 @@ export const EmployeesDirectoryView: React.FC = () => {
       setEmployeeToDelete(null);
     } catch (e) {
       toast.error('خطأ في عملية الحذف');
-    }
-  };
-
-  const handleToggleActive = async (id: string, currentStatus: string) => {
-    const nextStatus = currentStatus === 'inactive' ? 'active' : 'inactive';
-    try {
-      await updateDoc(doc(db, 'employees', id), { status: nextStatus });
-      toast.success(nextStatus === 'inactive' ? 'تم تعطيل حساب الموظف' : 'تم تفعيل حساب الموظف بنجاح');
-    } catch (e) {
-      toast.error('فشل تحديث حالة الموظف');
-    }
-  };
-
-  const handleResetPassword = async (email: string) => {
-    try {
-      if (!email) {
-        toast.error('لا يوجد بريد إلكتروني مسجل لهذا الموظف');
-        return;
-      }
-      await sendPasswordResetEmail(auth, email);
-      toast.success(`تم إرسال رابط إعادة تعيين كلمة المرور إلى ${email}`);
-    } catch (e) {
-      toast.error('فشل إرسال رابط إعادة تعيين كلمة المرور');
     }
   };
 
@@ -678,7 +650,35 @@ export const EmployeesDirectoryView: React.FC = () => {
           </p>
         </div>
 
-         
+         {/* Tab switch Navigation in top block */}
+        <div className="flex bg-white/5 border border-white/10 p-1.5 rounded-2xl self-start lg:self-center gap-1.5">
+          <button
+            onClick={() => setActiveTab('directory')}
+            className={cn(
+              "px-5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap",
+              activeTab === 'directory' ? "bg-[#7C3AED] text-white shadow-md shadow-[#7C3AED]/20" : "text-[#A78BFA] hover:text-white"
+            )}
+          >
+            عرض وفهرس البيانات
+          </button>
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={cn(
+              "px-5 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap flex items-center gap-1.5",
+              activeTab === 'pending' ? "bg-amber-500 text-black shadow-md shadow-amber-500/20" : "text-[#A78BFA] hover:text-white"
+            )}
+          >
+            <span>قيد الانتظار للتفعيل</span>
+            {pendingCount > 0 && (
+              <span className={cn(
+                "px-1.5 py-0.5 rounded-md text-[10px] font-black font-mono",
+                activeTab === 'pending' ? "bg-black text-amber-500" : "bg-amber-500/20 text-amber-400"
+              )}>
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Tab 1: Directory & View List */}
@@ -686,16 +686,7 @@ export const EmployeesDirectoryView: React.FC = () => {
         <div className="space-y-8 animate-in fade-in duration-300">
           
           {/* Main Action Block: Download Excel Button */}
-          <div className="flex justify-end gap-4">
-            {isSuperAdmin && (
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center justify-center gap-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-black text-sm py-4 px-8 rounded-2xl shadow-xl shadow-blue-500/10 hover:shadow-blue-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              <UserPlus size={20} />
-              <span>إضافة موظف جديد</span>
-            </button>
-)}
+          <div className="flex justify-end">
             <button
               onClick={exportToExcel}
               className="flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-sm py-4 px-8 rounded-2xl shadow-xl shadow-emerald-500/10 hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -706,7 +697,7 @@ export const EmployeesDirectoryView: React.FC = () => {
           </div>
 
           {/* Stats Cards Row */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 select-none">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 select-none">
             {/* Stat: Total Employees */}
             <div className="bg-[#1E0F33]/85 backdrop-blur-2xl p-6 rounded-[2rem] border border-[#7C3AED]/10 shadow-lg relative flex items-center justify-between">
               <div className="space-y-1">
@@ -726,6 +717,17 @@ export const EmployeesDirectoryView: React.FC = () => {
               </div>
               <div className="w-12 h-12 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center justify-center text-emerald-400">
                 <CheckCircle2 size={22} />
+              </div>
+            </div>
+
+            {/* Stat: Pending Activation */}
+            <div className="bg-[#1E0F33]/85 backdrop-blur-2xl p-6 rounded-[2rem] border border-amber-500/10 shadow-lg relative flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-amber-400 block">قيد الانتظار للتفعيل</span>
+                <span className="text-3xl font-black text-white block">{pendingCount}</span>
+              </div>
+              <div className="w-12 h-12 bg-amber-500/5 border border-amber-500/10 rounded-2xl flex items-center justify-center text-amber-400">
+                <Clock size={22} />
               </div>
             </div>
 
@@ -808,7 +810,8 @@ export const EmployeesDirectoryView: React.FC = () => {
                   >
                     <option value="all">كل الحالات</option>
                     <option value="active">نشط</option>
-                                        <option value="locked">مغلق</option>
+                    <option value="pending">قيد الانتظار</option>
+                    <option value="locked">مغلق</option>
                     <option value="archived">مؤرشف</option>
                   </select>
                   <span className="absolute inset-y-0 left-4 flex items-center text-[#A78BFA] pointer-events-none">
@@ -828,7 +831,8 @@ export const EmployeesDirectoryView: React.FC = () => {
                   >
                     <option value="all">كل الحالات</option>
                     <option value="completed">تم استكمال البيانات</option>
-                                      </select>
+                    <option value="pending">باقي استكمال البيانات</option>
+                  </select>
                   <span className="absolute inset-y-0 left-4 flex items-center text-[#A78BFA] pointer-events-none">
                     <FileText size={16} />
                   </span>
@@ -957,45 +961,36 @@ export const EmployeesDirectoryView: React.FC = () => {
                         </td>
 
                         {/* Options: Edit & Archive triggers */}
-                        {isSuperAdmin && (
-  <td className="px-6 py-5 align-middle text-center">
-    <div className="flex items-center justify-center gap-2">
-      <button
-        onClick={() => handleEdit(emp)}
-        className="inline-flex items-center justify-center p-2.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/10 rounded-xl text-blue-400 hover:text-blue-300 transition-all"
-        title="تعديل"
-      >
-        <Edit size={16} />
-      </button>
-      <button
-        onClick={() => handleResetPassword(emp.email)}
-        className="inline-flex items-center justify-center p-2.5 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/10 rounded-xl text-yellow-400 hover:text-yellow-300 transition-all"
-        title="إعادة تعيين كلمة المرور"
-      >
-        <KeyRound size={16} />
-      </button>
-      <button
-        onClick={() => handleToggleActive(emp.id, emp.status)}
-        className={cn(
-          "inline-flex items-center justify-center p-2.5 border rounded-xl transition-all",
-          emp.status === 'active' 
-            ? "bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/10 text-amber-400 hover:text-amber-300"
-            : "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/10 text-emerald-400 hover:text-emerald-300"
-        )}
-        title={emp.status === 'active' ? "تعطيل الحساب" : "تفعيل الحساب"}
-      >
-        {emp.status === 'active' ? <PowerOff size={16} /> : <Power size={16} />}
-      </button>
-      <button
-        onClick={() => setEmployeeToDelete(emp)}
-        className="inline-flex items-center justify-center p-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/10 rounded-xl text-rose-400 hover:text-rose-300 transition-all"
-        title="حذف الموظف"
-      >
-        <Trash2 size={16} />
-      </button>
-    </div>
-  </td>
-)}
+                        <td className="px-6 py-5 align-middle text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleEdit(emp)}
+                              className="inline-flex items-center justify-center p-2.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/10 rounded-xl text-blue-400 hover:text-blue-300 transition-all"
+                              title="تعديل بيانات الموظف"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleArchive(emp.id, emp.status)}
+                              className={cn(
+                                "inline-flex items-center justify-center p-2.5 rounded-xl border transition-all",
+                                emp.status === 'archived'
+                                  ? "bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/20 text-orange-400 hover:text-orange-300"
+                                  : "bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/10 text-amber-400 hover:text-amber-300"
+                              )}
+                              title={emp.status === 'archived' ? "استعادة الموظف من الأرشيف" : "أرشفة الموظف"}
+                            >
+                              <Archive size={16} />
+                            </button>
+                            <button
+                              onClick={() => setEmployeeToDelete(emp)}
+                              className="inline-flex items-center justify-center p-2.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/10 rounded-xl text-rose-400 hover:text-rose-300 transition-all"
+                              title="حذف الموظف نهائياً"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1006,7 +1001,137 @@ export const EmployeesDirectoryView: React.FC = () => {
         </div>
       )}
 
+      {/* Tab 3: Employees Pending Activation */}
+      {activeTab === 'pending' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="bg-[#1E0F33]/60 backdrop-blur-2xl p-10 rounded-[3rem] border border-white/5 relative overflow-hidden shadow-2xl">
+            <div className="absolute -top-10 -left-10 w-96 h-96 bg-amber-500/5 blur-[120px] -z-10 rounded-full" />
+            
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 mb-8 border-b border-white/5 pb-8">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-center text-amber-400 shadow-lg">
+                  <Clock size={28} />
+                </div>
+                <div>
+                  <h3 className="text-3xl font-black text-amber-200">طلبات تفعيل الموظفين الجدد</h3>
+                  <p className="text-[#A78BFA] text-sm mt-1">الحسابات الجديدة التي سجلت عبر Google وبانتظار تعيين بياناتها وتأكيد عضويتها لبدء العمل</p>
+                </div>
+              </div>
+              <div className="bg-amber-500/10 text-amber-300 font-mono font-black text-sm px-5 py-2 rounded-2xl border border-amber-500/20 shrink-0 shadow-inner">
+                قيد الانتظار ({employees.filter(emp => emp.status === 'pending').length})
+              </div>
+            </div>
 
+            {employees.filter(emp => emp.status === 'pending').length === 0 ? (
+              <div className="text-center py-20 bg-white/[0.02] border border-white/5 rounded-3xl">
+                <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mx-auto mb-6 shadow-inner animate-pulse">
+                  <CheckCircle size={32} />
+                </div>
+                <h4 className="text-xl font-black text-white mb-2">لا توجد طلبات تفعيل معلقة حالياً</h4>
+                <p className="text-sm text-[#A78BFA]/70 max-w-md mx-auto leading-relaxed">
+                  جميع حسابات الموظفين المسجلة عبر جوجل مفعلة بالكامل ونشطة مع تحديد كود التوظيف والموقع الوظيفي.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {employees.filter(emp => emp.status === 'pending').map((emp) => {
+                  const draft = pendingForms[emp.id] || {};
+                  return (
+                    <div key={emp.id} className="p-6 bg-[#12071F]/40 border border-white/5 hover:border-amber-500/20 rounded-3xl grid grid-cols-1 xl:grid-cols-12 gap-6 items-center transition-all duration-300 shadow-md">
+                      {/* Info */}
+                      <div className="xl:col-span-3 flex items-center gap-4 min-w-0">
+                        <div className="w-14 h-14 bg-amber-500/10 text-amber-400 font-black rounded-2xl flex items-center justify-center text-xl shrink-0 border border-amber-500/15 overflow-hidden shadow-inner">
+                          {emp.photoUrl ? (
+                            <img src={emp.photoUrl} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            emp.fullName.charAt(0)
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="font-bold text-white text-lg block leading-tight truncate">{emp.fullName}</span>
+                          <span className="text-xs text-[#A78BFA] block font-mono mt-1 opacity-70 truncate">{emp.email}</span>
+                        </div>
+                      </div>
+
+                      {/* Inputs */}
+                      <div className="xl:col-span-9 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+                        {/* roleCode */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-amber-300 px-1 font-bold">كود الموظف التلقائي</label>
+                          <div className="w-full bg-[#12071F]/50 border border-white/5 rounded-xl px-3 py-2 text-xs text-amber-400 font-mono text-center font-bold">
+                            {emp.roleCode || getNextEmployeeCode(employees, employees.filter(e => e.status === 'pending').indexOf(emp))}
+                          </div>
+                        </div>
+
+                        {/* company */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-amber-300 px-1 font-bold">الشركة</label>
+                          <select 
+                            className="w-full bg-[#12071F]/80 border border-white/10 rounded-xl px-2 py-2 text-xs text-white cursor-pointer outline-none focus:border-[#C084FC] text-right"
+                            value={draft.company || emp.company || settings?.companies?.[0] || 'مجموعة أكسس'}
+                            onChange={e => updatePendingField(emp.id, 'company', e.target.value)}
+                          >
+                            {settings?.companies?.map(c => <option key={c} value={c} className="bg-[#1E0F33]">{c}</option>)}
+                          </select>
+                        </div>
+
+                        {/* department */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-[#A78BFA] px-1 font-bold">القسم</label>
+                          <select 
+                            className="w-full bg-[#12071F]/80 border border-white/10 rounded-xl px-2 py-2 text-xs text-white cursor-pointer outline-none focus:border-[#C084FC] text-right"
+                            value={draft.department || emp.department || settings?.departments?.[0] || ''}
+                            onChange={e => updatePendingField(emp.id, 'department', e.target.value)}
+                          >
+                            {settings?.departments?.map(d => <option key={d} value={d} className="bg-[#1E0F33]">{d}</option>)}
+                          </select>
+                        </div>
+
+                        {/* jobTitle */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-[#A78BFA] px-1 font-bold">المسمى الوظيفي</label>
+                          <select 
+                            className="w-full bg-[#12071F]/80 border border-white/10 rounded-xl px-2 py-2 text-xs text-white cursor-pointer outline-none focus:border-[#C084FC] text-right"
+                            value={draft.jobTitle || emp.jobTitle || settings?.jobTitles?.[0] || ''}
+                            onChange={e => updatePendingField(emp.id, 'jobTitle', e.target.value)}
+                          >
+                            {settings?.jobTitles?.map(t => <option key={t} value={t} className="bg-[#1E0F33]">{t}</option>)}
+                          </select>
+                        </div>
+
+                        {/* role */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-[#A78BFA] px-1 font-bold">الحساب</label>
+                          <select 
+                            className="w-full bg-[#12071F]/80 border border-white/10 rounded-xl px-2 py-2 text-xs text-white cursor-pointer outline-none focus:border-[#C084FC] text-right"
+                            value={draft.role || emp.role || 'EMPLOYEE'}
+                            onChange={e => updatePendingField(emp.id, 'role', e.target.value)}
+                          >
+                            <option value="EMPLOYEE" className="bg-[#1E0F33]">MEMBER</option>
+                            <option value="HR-MASTER" className="bg-[#1E0F33]">HR MASTER</option>
+                            <option value="GM-MASTER" className="bg-[#1E0F33]">TOP MASTER</option>
+                          </select>
+                        </div>
+
+                        {/* Action Button */}
+                        <div className="flex items-end justify-end h-full">
+                          <button
+                            type="button"
+                            onClick={() => handleActivatePending(emp)}
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 px-3 rounded-xl font-black text-xs transition-colors shadow-lg active:scale-95 whitespace-nowrap"
+                          >
+                            تفعيل وتأكيد العضوية
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
 
 
@@ -1843,14 +1968,6 @@ export const EmployeesDirectoryView: React.FC = () => {
         )}
       </AnimatePresence>
 
-          <AddEmployeeModal
-        isOpen={showAddModal}
-        profile={profile}
-        onClose={() => setShowAddModal(false)}
-        settings={settings}
-        employees={employees}
-        getNextEmployeeCode={getNextEmployeeCode}
-      />
     </div>
   );
 };

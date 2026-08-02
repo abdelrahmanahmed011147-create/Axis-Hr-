@@ -1,4 +1,4 @@
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'HR' | 'MANAGER' | 'EMPLOYEE' | 'HR-MASTER' | 'GM-MASTER';
+export type UserRole = 'EMPLOYEE' | 'HR-MASTER' | 'GM-MASTER';
 
 export interface Employee {
   id: string; // Firebase Auth UID
@@ -11,11 +11,7 @@ export interface Employee {
   phone: string;
   email: string;
   status: 'active' | 'inactive' | 'pending' | 'locked' | 'archived' | 'deleted';
-  mustChangePassword?: boolean;
   createdAt: any;
-  createdBy?: string;
-  lastLogin?: any;
-  uid?: string;
   
   // Detailed HR Fields
   fingerprint?: string;

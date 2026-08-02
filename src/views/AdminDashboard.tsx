@@ -119,7 +119,6 @@ export const AdminDashboard: React.FC = () => {
         phone: newUser.phone,
         email: emailLower,
         status: 'active',
-        mustChangePassword: true,
         createdAt: serverTimestamp(),
       };
 

@@ -12,7 +12,6 @@ import { AuthView } from './views/AuthView';
 import { AppShell } from './components/AppShell';
 import { EmployeePortal } from './views/EmployeePortal';
 import { AdminDashboard } from './views/AdminDashboard';
-import { ForcePasswordChangeView } from './views/ForcePasswordChangeView';
 import { SettingsView } from './views/SettingsView';
 import { RequestsView } from './views/RequestsView';
 import { AttendanceLogsView } from './views/AttendanceLogsView';
@@ -162,8 +161,53 @@ function AppContent() {
       console.error('Realtime requests notification error:', error);
     });
 
+    // 2. Listen to new employees signing up
+    const unsubEmployees = onSnapshot(collection(db, 'employees'), (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          const data = change.doc.data();
+          const docTime = getTimestamp(data.createdAt);
+
+          // Only process real-time notifications created after screen session started
+          if (docTime < sessionStartTime.current) {
+            return;
+          }
+
+          playChime();
+
+          // Add to system notifications state with unified stable ID
+          const newNotif: NotificationItem = {
+            id: `emp-${change.doc.id}`,
+            title: `انضمام موظف جديد 👥`,
+            body: `${data.fullName || 'موظف تحت الاختبار'} - ${data.jobTitle || 'موظف جديد'}`,
+            timestamp: new Date().toISOString(),
+            isRead: false,
+            type: 'employee'
+          };
+
+          setNotifications(prev => {
+            if (prev.some(n => n.id === newNotif.id)) return prev;
+            return [newNotif, ...prev];
+          });
+
+          toast.success(`موظف جديد سجل: ${data.fullName || ''}`, {
+            style: {
+              background: '#1E0F33',
+              border: '1px solid rgba(192, 132, 252, 0.25)',
+              color: '#F5F3FF',
+              borderRadius: '1rem',
+              direction: 'rtl'
+            }
+          });
+        }
+      });
+    }, (error) => {
+      console.error('Realtime employees notification error:', error);
+    });
+
     return () => {
       unsubRequests();
+      unsubEmployees();
     };
   }, [isAdmin, user]);
 
@@ -193,9 +237,41 @@ function AppContent() {
     );
   }
 
-  // Force Password Change Block
-  if (profile.mustChangePassword) {
-    return <ForcePasswordChangeView />;
+  // Pending activation block
+  if (profile.status !== 'active') {
+    return (
+      <div className="min-h-screen bg-[#12071F] flex items-center justify-center p-4 select-none" dir="rtl">
+        <div className="w-full max-w-md bg-[#1E0F33]/85 backdrop-blur-2xl p-10 rounded-[3rem] border border-[#7C3AED]/20 shadow-2xl relative z-10 text-center">
+          <div className="w-20 h-20 bg-amber-500/10 rounded-[2.2rem] flex items-center justify-center text-amber-400 border border-amber-500/20 shadow-xl mx-auto mb-8 animate-pulse">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          
+          <h2 className="text-2xl font-black text-white mb-2">تفعيل حساب الموظف</h2>
+          <p className="text-[#A78BFA] text-sm leading-relaxed mb-6">
+            مرحباً بك، <span className="text-white font-black">{profile.fullName || 'زميلنا الجديد'}</span>
+          </p>
+
+          <div className="p-5 bg-white/5 border border-white/5 rounded-2xl text-[#E0E7FF] text-sm font-medium leading-relaxed mb-6">
+             حسابك قيد الانتظار للتفعيل حالياً. يرجى التواصل مع إدارة الموارد البشرية (HR) لتنشيط حسابك واستكمال بياناتك الوظيفية.
+          </div>
+
+          <div className="space-y-4">
+            <div className="text-xs text-[#A78BFA]/50 font-mono">
+              البريد: {profile.email}
+            </div>
+            
+            <button
+              onClick={() => auth.signOut()}
+              className="w-full bg-white/5 border border-white/10 hover:bg-white/10 text-[#A78BFA] hover:text-white py-3.5 px-6 rounded-2xl text-xs font-bold transition-all"
+            >
+              تسجيل خروج
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const renderContent = () => {
