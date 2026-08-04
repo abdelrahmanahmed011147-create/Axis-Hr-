@@ -35,7 +35,11 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (!isAdmin) return;
     const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
-      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)));
+      setEmployees(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as Employee))
+          .filter(e => !(e as any).migrated) // exclude preserved migration backups
+      );
     }, (error) => {
       console.error("Employees fetch error:", error);
     });

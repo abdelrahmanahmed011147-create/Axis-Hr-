@@ -1,19 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { signInWithPopup } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp, query, where, getDocs, collection, deleteDoc, writeBatch } from 'firebase/firestore';
-import { auth, db, getGoogleProvider } from '../lib/firebase';
+import { auth, getGoogleProvider } from '../lib/firebase';
 import { motion } from 'motion/react';
 import { Toaster, toast } from 'react-hot-toast';
 import { Chrome, Loader2, ShieldCheck, AlertCircle, ExternalLink } from 'lucide-react';
 import { CompanyLogo } from '../components/CompanyLogo';
-
-const MASTER_EMAIL = 'abdelrahmanahmed011147@gmail.com';
 
 export const AuthView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [configError, setConfigError] = useState<'permission-denied' | 'unauthorized-domain' | 'network-error' | null>(null);
 
   // Google Authentication Pattern
+  //
+  // NOTE: Profile creation / migration (searching by email, merging duplicate
+  // records, moving attendance & requests references) is handled EXCLUSIVELY
+  // by AuthContext.tsx's onAuthStateChanged listener. It used to be duplicated
+  // here too, which created a race condition: both this handler and the
+  // AuthContext listener would run the same "create-or-migrate" sequence
+  // concurrently on every login, sometimes interleaving writes from one flow
+  // with writes from the other. That race is part of what used to make
+  // employee records appear to "disappear" after a reconnect/crash.
+  // This handler now only performs the actual sign-in; AuthContext is the
+  // single source of truth for profile writes, and it never deletes data —
+  // old records are preserved and only flagged as migrated.
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
@@ -22,95 +31,7 @@ export const AuthView: React.FC = () => {
 
       if (!user.email) throw new Error('تعذر جلب البريد الإلكتروني من Google');
 
-      // Check if profile exists
-      let profileDoc = await getDoc(doc(db, 'employees', user.uid));
-      
-      const emailLower = user.email.toLowerCase();
-      const isMaster = emailLower === MASTER_EMAIL.toLowerCase();
-
-      if (!profileDoc.exists()) {
-        // Search if there is an existing profile with same email (created manually by admin)
-        const q = query(collection(db, 'employees'), where('email', '==', emailLower));
-        const qSnap = await getDocs(q);
-
-        if (!qSnap.empty) {
-          const oldDoc = qSnap.docs[0];
-          const oldData = oldDoc.data();
-          const oldUid = oldDoc.id;
-
-          if (oldUid !== user.uid) {
-            // Migrate old data to the new user.uid
-            const migratedData = {
-              ...oldData,
-              email: emailLower,
-              fullName: oldData.fullName || user.displayName || 'موظف جديد',
-              updatedAt: serverTimestamp(),
-            };
-
-            await setDoc(doc(db, 'employees', user.uid), migratedData);
-            await deleteDoc(doc(db, 'employees', oldUid));
-
-            // Migrate references in other collections
-            const batch = writeBatch(db);
-            let hasBatchOperations = false;
-
-            const reqsQuery = query(collection(db, 'requests'), where('userId', '==', oldUid));
-            const reqsSnap = await getDocs(reqsQuery);
-            reqsSnap.forEach(d => {
-              batch.update(d.ref, { userId: user.uid });
-              hasBatchOperations = true;
-            });
-
-            const attQuery = query(collection(db, 'attendance'), where('userId', '==', oldUid));
-            const attSnap = await getDocs(attQuery);
-            attSnap.forEach(d => {
-              batch.update(d.ref, { userId: user.uid });
-              hasBatchOperations = true;
-            });
-
-            const evQuery = query(collection(db, 'kpiEvaluations'), where('employeeId', '==', oldUid));
-            const evSnap = await getDocs(evQuery);
-            evSnap.forEach(d => {
-              batch.update(d.ref, { employeeId: user.uid });
-              hasBatchOperations = true;
-            });
-
-            if (hasBatchOperations) {
-              await batch.commit();
-            }
-          }
-          
-          toast.success('مرحباً بك، تم نقل جلستك وبياناتك بنجاح!');
-        } else {
-          // No profile at all, create a new pending one
-          const employeeData = {
-            roleCode: isMaster ? 'MASTER_ADMIN' : '',
-            fullName: user.displayName || 'موظف جديد',
-            role: isMaster ? 'GM-MASTER' : 'EMPLOYEE',
-            company: isMaster ? 'مجموعة أكسس' : '',
-            department: isMaster ? 'General' : '',
-            jobTitle: isMaster ? 'General Manager' : '',
-            phone: user.phoneNumber || '',
-            email: emailLower,
-            status: isMaster ? 'active' : 'pending',
-            createdAt: serverTimestamp(),
-          };
-
-          await setDoc(doc(db, 'employees', user.uid), employeeData);
-          if (isMaster) {
-            toast.success('مرحباً بك يا مدير النظام');
-          } else {
-            toast.success('تم إنشاء الحساب بنجاح بوضع الانتظار! قيد المراجعة لتأكيد وتفعيل ملفك.');
-          }
-        }
-      } else {
-        const data = profileDoc.data();
-        if (isMaster && data.status !== 'active') {
-          // Keep master active
-          await setDoc(doc(db, 'employees', user.uid), { status: 'active' }, { merge: true });
-        }
-        toast.success(`أهلاً بك، ${data.fullName || user.displayName}`);
-      }
+      toast.success(`أهلاً بك، ${user.displayName || user.email}`);
     } catch (error: any) {
       if (error.code === 'auth/popup-closed-by-user') {
         toast.error('تم إغلاق نافذة تسجيل الدخول');

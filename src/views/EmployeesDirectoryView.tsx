@@ -98,8 +98,8 @@ export const EmployeesDirectoryView: React.FC = () => {
       collection(db, 'employees'), 
       (snap) => {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee));
-        // Filter out deleted employees
-        setEmployees(list.filter(e => e.status !== 'deleted'));
+        // Filter out deleted employees and preserved migration backups
+        setEmployees(list.filter(e => e.status !== 'deleted' && !(e as any).migrated));
         setLoading(false);
       },
       (error) => {

@@ -5,7 +5,7 @@ import { recalculateAttendanceForUserAndDate } from '../lib/attendanceUtils';
 import { useAuth } from '../context/AuthContext';
 import { getCairoNow, formatCairoDate, formatCairoTime, calculateDeduction, cn, formatTimeTo12Hour, formatDelayToArabic, formatStringTimeTo12Hour, getCairoOffset, calculatePermissionHours } from '../lib/utils';
 import { Toaster, toast } from 'react-hot-toast';
-import { Clock, Coffee, Send, MapPin, UserCheck, UserX, Sun, Moon, Calendar, X as CloseIcon } from 'lucide-react';
+import { Clock, Coffee, Send, MapPin, UserCheck, UserX, Sun, Moon, Calendar, X as CloseIcon, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Attendance, LeaveRequest } from '../types';
 import { INSPIRATIONS } from '../data/inspirations';
@@ -13,6 +13,7 @@ import { INSPIRATIONS } from '../data/inspirations';
 export const EmployeePortal: React.FC = () => {
   const { profile } = useAuth();
   const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
+  const [attendanceLoaded, setAttendanceLoaded] = useState(false);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -128,6 +129,8 @@ export const EmployeePortal: React.FC = () => {
   const queryDate = getQueryDate(currentTime);
 
   useEffect(() => {
+    setAttendanceLoaded(false);
+
     // Sync settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'system_config'), (docSnap) => {
       setSettings(docSnap.exists() ? docSnap.data() : {});
@@ -146,12 +149,19 @@ export const EmployeePortal: React.FC = () => {
 
     const unsubAttendance = onSnapshot(q, (snap) => {
       if (!snap.empty) {
-        setTodayAttendance({ id: snap.docs[0].id, ...snap.docs[0].data() } as Attendance);
+        // Guard against any leftover duplicate docs: always take the
+        // earliest-created record as the authoritative check-in.
+        const docs = [...snap.docs].sort((a, b) =>
+          (a.data().createdAt?.seconds || 0) - (b.data().createdAt?.seconds || 0)
+        );
+        setTodayAttendance({ id: docs[0].id, ...docs[0].data() } as Attendance);
       } else {
         setTodayAttendance(null);
       }
+      setAttendanceLoaded(true);
     }, (error) => {
       console.error("Attendance fetch error:", error);
+      setAttendanceLoaded(true);
     });
 
     // Fetch approved or pending permission for queryDate
@@ -193,8 +203,29 @@ export const EmployeePortal: React.FC = () => {
       toast.error('عذراً، تسجيل الحضور متاح فقط من أجهزة الكومبيوتر المعتمدة.');
       return;
     }
+    if (todayAttendance) {
+      toast.error('لقد سجلت حضورك اليوم بالفعل.');
+      return;
+    }
     setLoading(true);
     try {
+      // Re-check directly against Firestore right before writing. This closes
+      // the race window between page load and the attendance listener
+      // resolving, where a user could click Check-In while todayAttendance
+      // was still null locally even though a record already exists server-side.
+      const dupCheckQuery = query(
+        collection(db, 'attendance'),
+        where('userId', '==', profile.id),
+        where('date', '==', queryDate)
+      );
+      const dupCheckSnap = await getDocs(dupCheckQuery);
+      if (!dupCheckSnap.empty) {
+        toast.error('لقد سجلت حضورك اليوم بالفعل.');
+        setTodayAttendance({ id: dupCheckSnap.docs[0].id, ...dupCheckSnap.docs[0].data() } as Attendance);
+        setLoading(false);
+        return;
+      }
+
       const now = getCairoNow();
       const timeStr = formatCairoTime(now, 'HH:mm');
       
@@ -665,7 +696,17 @@ export const EmployeePortal: React.FC = () => {
                      </p>
                    </div>
                  </div>
-               ) : !todayAttendance ? (
+               ) : !attendanceLoaded ? (
+                <button 
+                  disabled
+                  className="w-full py-5 rounded-[2rem] bg-white/5 text-white/30 border border-white/10 cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-center gap-3">
+                    <Loader2 size={20} className="animate-spin" />
+                    <span>جاري التحقق من حالة حضورك...</span>
+                  </div>
+                </button>
+              ) : !todayAttendance ? (
                 <button 
                   onClick={handleCheckIn}
                   disabled={loading}

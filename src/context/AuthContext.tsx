@@ -5,7 +5,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot, getDoc, setDoc, serverTimestamp, query, where, getDocs, collection, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, serverTimestamp, query, where, getDocs, collection, writeBatch } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee } from '../types';
 
@@ -85,12 +85,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const qSnap = await getDocs(q);
 
               if (!qSnap.empty) {
-                // Found existing manually created employee profile
-                const oldDoc = qSnap.docs[0];
+                // Found existing manually created employee profile.
+                // Skip any doc already marked migrated:true — those are
+                // preserved backups, not active source records — so we never
+                // treat an old backup as a migration source again.
+                const oldDoc = qSnap.docs.find(d => !d.data().migrated) || qSnap.docs[0];
                 const oldData = oldDoc.data();
                 const oldUid = oldDoc.id;
 
-                if (oldUid !== authUser.uid) {
+                if (oldUid !== authUser.uid && !oldData.migrated) {
                   // Migrate/Copy data to the new authUser.uid
                   const migratedData = {
                     ...oldData,
@@ -99,10 +102,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     updatedAt: serverTimestamp(),
                   };
 
+                  // 1) Create the new profile first, carrying over all old data.
                   await setDoc(doc(db, 'employees', authUser.uid), migratedData);
-                  await deleteDoc(doc(db, 'employees', oldUid));
 
-                  // Migrate references in other collections
+                  // 2) Migrate every reference (attendance/requests/evaluations)
+                  //    from oldUid to authUser.uid.
                   const batch = writeBatch(db);
                   let hasBatchOperations = false;
 
@@ -130,7 +134,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   if (hasBatchOperations) {
                     await batch.commit();
                   }
-                  console.log(`Successfully migrated profile from ${oldUid} to ${authUser.uid}`);
+
+                  // 3) NEVER delete the old profile. Mark it as migrated instead,
+                  //    so it stays in Firestore permanently as a recoverable
+                  //    backup. This is a pure additive write (merge: true) —
+                  //    it cannot destroy data, only annotate it. Even if the
+                  //    process is interrupted at any point before this line,
+                  //    the old document is still fully intact.
+                  await setDoc(
+                    doc(db, 'employees', oldUid),
+                    {
+                      migrated: true,
+                      migratedTo: authUser.uid,
+                      migratedAt: serverTimestamp(),
+                    },
+                    { merge: true }
+                  );
+                  console.log(`Successfully migrated profile from ${oldUid} to ${authUser.uid} (old doc preserved as backup)`);
                 }
               } else {
                 // Auto-create new default pending profile
