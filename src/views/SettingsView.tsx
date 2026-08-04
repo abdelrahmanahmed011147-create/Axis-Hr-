@@ -27,6 +27,8 @@ export const SettingsView: React.FC = () => {
           if (!data.morningEndTime) data.morningEndTime = "17:00";
           if (!data.eveningStartTime) data.eveningStartTime = "12:00";
           if (!data.eveningEndTime) data.eveningEndTime = "21:00";
+          if (!(data as any).evening2StartTime) (data as any).evening2StartTime = "13:00";
+          if (!(data as any).evening2EndTime) (data as any).evening2EndTime = "21:00";
           setSettings(data);
         } else {
           setSettings({} as any);
@@ -166,7 +168,7 @@ export const SettingsView: React.FC = () => {
           <Shield size={32} />
         </div>
         <h2 className="text-xl font-bold text-red-400">غير مصرح بالوصول</h2>
-        <p className="text-sm text-[#A78BFA] mt-2">عذراً، هذه الصفحة مخصصة لمدراء النظام فقط ولا يسمح للموظفين بالاطلاع على إعدادات المجموعة.</p>
+        <p className="text-base text-[#A78BFA] mt-2">عذراً، هذه الصفحة مخصصة لمدراء النظام فقط ولا يسمح للموظفين بالاطلاع على إعدادات المجموعة.</p>
       </div>
     );
   }
@@ -191,7 +193,7 @@ export const SettingsView: React.FC = () => {
           </div>
           <div>
             <h3 className="text-2xl font-black tracking-tight text-white mb-0.5">إعدادات النظام</h3>
-            <p className="text-xs text-[#A78BFA]">تخصيص القواعد والبيانات الأساسية للشركة والمجموعة</p>
+            <p className="text-sm text-[#A78BFA]">تخصيص القواعد والبيانات الأساسية للشركة والمجموعة</p>
           </div>
         </div>
 
@@ -199,7 +201,7 @@ export const SettingsView: React.FC = () => {
           {!hasSettings && (
             <button 
               onClick={runSeed}
-              className="group bg-gradient-to-r from-orange-500 to-rose-500 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-lg"
+              className="group bg-gradient-to-r from-orange-500 to-rose-500 text-white px-5 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 hover:scale-105 active:scale-95 transition-all shadow-lg"
             >
               <Save size={16} />
               <span>تهيئة النظام</span>
@@ -214,7 +216,7 @@ export const SettingsView: React.FC = () => {
           <SettingsIcon className="mx-auto text-[#7C3AED] opacity-25 animate-spin-slow" size={60} />
           <div className="max-w-md mx-auto">
             <h4 className="text-xl font-black mb-1">النظام غير جاهز</h4>
-            <p className="text-[#A78BFA] text-sm leading-relaxed">يرجى الضغط على زر "تهيئة النظام" بالأعلى لإضافة الأقسام ومواعيد العمل والبيانات الضرورية لتشغيل تطبيق AXIS.</p>
+            <p className="text-[#A78BFA] text-base leading-relaxed">يرجى الضغط على زر "تهيئة النظام" بالأعلى لإضافة الأقسام ومواعيد العمل والبيانات الضرورية لتشغيل تطبيق AXIS.</p>
           </div>
         </div>
       ) : (
@@ -231,16 +233,16 @@ export const SettingsView: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="text-lg font-black text-white">إدارة شيفتات ومواعيد العمل الرسمية</h4>
-                  <p className="text-xs text-[#A78BFA]">تخصيص أوقات الشيفت الصباحي والمسائي وقواعد الحضور والانصراف</p>
+                  <p className="text-sm text-[#A78BFA]">تخصيص أوقات الشيفت الصباحي والمسائي وقواعد الحضور والانصراف</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {/* Morning Shift Card */}
                 <div className="bg-white/[0.02] p-5 rounded-2xl border border-white/5 space-y-4">
                   <div className="flex items-center gap-2 border-b border-white/5 pb-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <h5 className="text-sm font-black text-white">الشيفت الصباحي</h5>
+                    <h5 className="text-base font-black text-white">الشيفت الصباحي</h5>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -249,7 +251,7 @@ export const SettingsView: React.FC = () => {
                         type="time"
                         value={settings.morningStartTime || "09:00"}
                         onChange={(e) => setSettings({ ...settings, morningStartTime: e.target.value })}
-                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-xs font-mono outline-none focus:border-[#E2B765] transition-all"
+                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                       />
                     </div>
                     <div>
@@ -258,7 +260,7 @@ export const SettingsView: React.FC = () => {
                         type="time"
                         value={settings.morningEndTime || "17:00"}
                         onChange={(e) => setSettings({ ...settings, morningEndTime: e.target.value })}
-                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-xs font-mono outline-none focus:border-[#E2B765] transition-all"
+                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                       />
                     </div>
                   </div>
@@ -268,7 +270,7 @@ export const SettingsView: React.FC = () => {
                 <div className="bg-white/[0.02] p-5 rounded-2xl border border-white/5 space-y-4">
                   <div className="flex items-center gap-2 border-b border-white/5 pb-2">
                     <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <h5 className="text-sm font-black text-white">الشيفت المسائي</h5>
+                    <h5 className="text-base font-black text-white">الشيفت المسائي</h5>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -277,7 +279,7 @@ export const SettingsView: React.FC = () => {
                         type="time"
                         value={settings.eveningStartTime || "12:00"}
                         onChange={(e) => setSettings({ ...settings, eveningStartTime: e.target.value })}
-                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-xs font-mono outline-none focus:border-[#E2B765] transition-all"
+                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                       />
                     </div>
                     <div>
@@ -286,7 +288,35 @@ export const SettingsView: React.FC = () => {
                         type="time"
                         value={settings.eveningEndTime || "21:00"}
                         onChange={(e) => setSettings({ ...settings, eveningEndTime: e.target.value })}
-                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-xs font-mono outline-none focus:border-[#E2B765] transition-all"
+                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Evening Shift 2 Card (NEW third shift) */}
+                <div className="bg-white/[0.02] p-5 rounded-2xl border border-white/5 space-y-4">
+                  <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                    <h5 className="text-base font-black text-white">الشيفت المسائي (13:00)</h5>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] text-[#A78BFA] mb-1.5 font-bold">وقت بدء العمل</label>
+                      <input 
+                        type="time"
+                        value={(settings as any).evening2StartTime || "13:00"}
+                        onChange={(e) => setSettings({ ...settings, evening2StartTime: e.target.value } as any)}
+                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-[#A78BFA] mb-1.5 font-bold">وقت انتهاء العمل</label>
+                      <input 
+                        type="time"
+                        value={(settings as any).evening2EndTime || "21:00"}
+                        onChange={(e) => setSettings({ ...settings, evening2EndTime: e.target.value } as any)}
+                        className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                       />
                     </div>
                   </div>
@@ -300,7 +330,7 @@ export const SettingsView: React.FC = () => {
                     type="number"
                     value={settings.graceMinutes ?? 15}
                     onChange={(e) => setSettings({ ...settings, graceMinutes: Number(e.target.value) })}
-                    className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-xs font-mono outline-none focus:border-[#E2B765] transition-all"
+                    className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                   />
                 </div>
                 <div>
@@ -309,7 +339,7 @@ export const SettingsView: React.FC = () => {
                     type="number"
                     value={settings.monthlyPermissionHours ?? 5}
                     onChange={(e) => setSettings({ ...settings, monthlyPermissionHours: Number(e.target.value) })}
-                    className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-xs font-mono outline-none focus:border-[#E2B765] transition-all"
+                    className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                   />
                 </div>
                 <div>
@@ -318,7 +348,7 @@ export const SettingsView: React.FC = () => {
                     type="number"
                     value={settings.permissionOverLimit ?? 7}
                     onChange={(e) => setSettings({ ...settings, permissionOverLimit: Number(e.target.value) })}
-                    className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-xs font-mono outline-none focus:border-[#E2B765] transition-all"
+                    className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                   />
                 </div>
               </div>
@@ -336,7 +366,7 @@ export const SettingsView: React.FC = () => {
                     <Building size={18} />
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-white">الهيكل التنظيمي</h4>
+                    <h4 className="text-base font-black text-white">الهيكل التنظيمي</h4>
                     <p className="text-[10px] text-emerald-400/75">إدارة أقسام وإدارات الشركة</p>
                   </div>
                 </div>
@@ -347,7 +377,7 @@ export const SettingsView: React.FC = () => {
                       type="text"
                       id="new-dept"
                       placeholder="قسم جديد..."
-                      className="flex-1 bg-white/[0.02] border border-white/10 focus:border-emerald-500 focus:bg-white/[0.04] rounded-xl py-2 px-3 text-xs text-white outline-none transition-all text-right font-sans placeholder-white/20"
+                      className="flex-1 bg-white/[0.02] border border-white/10 focus:border-emerald-500 focus:bg-white/[0.04] rounded-xl py-2 px-3 text-sm text-white outline-none transition-all text-right font-sans placeholder-white/20"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -368,7 +398,7 @@ export const SettingsView: React.FC = () => {
                           input.value = '';
                         }
                       }}
-                      className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl text-xs font-black transition-all hover:shadow-lg hover:shadow-emerald-500/10 active:scale-95 flex items-center gap-1 shrink-0"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl text-sm font-black transition-all hover:shadow-lg hover:shadow-emerald-500/10 active:scale-95 flex items-center gap-1 shrink-0"
                     >
                       <Plus size={14} />
                       <span>إضافة</span>
@@ -377,14 +407,14 @@ export const SettingsView: React.FC = () => {
 
                   <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                     {(!settings.departments || settings.departments.length === 0) ? (
-                      <div className="w-full text-center py-8 text-white/20 text-xs">لا توجد أقسام مضافة بعد</div>
+                      <div className="w-full text-center py-8 text-white/20 text-sm">لا توجد أقسام مضافة بعد</div>
                     ) : (
                       settings.departments.map((dept, i) => (
                         <motion.span 
                           initial={{ scale: 0.9, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           key={i} 
-                          className="bg-emerald-500/5 text-emerald-300 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-2 border border-emerald-500/10 hover:border-emerald-500/30 transition-all cursor-default font-sans group/tag"
+                          className="bg-emerald-500/5 text-emerald-300 px-2.5 py-1 rounded-lg text-sm font-bold flex items-center gap-2 border border-emerald-500/10 hover:border-emerald-500/30 transition-all cursor-default font-sans group/tag"
                         >
                           {dept}
                           <button 
@@ -410,7 +440,7 @@ export const SettingsView: React.FC = () => {
                     <Briefcase size={18} />
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-white">المسميات الوظيفية</h4>
+                    <h4 className="text-base font-black text-white">المسميات الوظيفية</h4>
                     <p className="text-[10px] text-purple-400/75">إدارة الأدوار والمسميات الوظيفية</p>
                   </div>
                 </div>
@@ -421,7 +451,7 @@ export const SettingsView: React.FC = () => {
                       type="text"
                       id="new-title"
                       placeholder="مسمى جديد..."
-                      className="flex-1 bg-white/[0.02] border border-white/10 focus:border-purple-500 focus:bg-white/[0.04] rounded-xl py-2 px-3 text-xs text-white outline-none transition-all text-right font-sans placeholder-white/20"
+                      className="flex-1 bg-white/[0.02] border border-white/10 focus:border-purple-500 focus:bg-white/[0.04] rounded-xl py-2 px-3 text-sm text-white outline-none transition-all text-right font-sans placeholder-white/20"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -442,7 +472,7 @@ export const SettingsView: React.FC = () => {
                           input.value = '';
                         }
                       }}
-                      className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-xl text-xs font-black transition-all hover:shadow-lg hover:shadow-purple-500/10 active:scale-95 flex items-center gap-1 shrink-0"
+                      className="bg-purple-500 hover:bg-purple-600 text-white px-3 py-2 rounded-xl text-sm font-black transition-all hover:shadow-lg hover:shadow-purple-500/10 active:scale-95 flex items-center gap-1 shrink-0"
                     >
                       <Plus size={14} />
                       <span>إضافة</span>
@@ -451,14 +481,14 @@ export const SettingsView: React.FC = () => {
 
                   <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                     {(!settings.jobTitles || settings.jobTitles.length === 0) ? (
-                      <div className="w-full text-center py-8 text-white/20 text-xs">لا توجد مسميات مضافة بعد</div>
+                      <div className="w-full text-center py-8 text-white/20 text-sm">لا توجد مسميات مضافة بعد</div>
                     ) : (
                       settings.jobTitles.map((title, i) => (
                         <motion.span 
                           initial={{ scale: 0.9, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           key={i} 
-                          className="bg-purple-500/5 text-purple-300 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-2 border border-purple-500/10 hover:border-purple-500/30 transition-all cursor-default font-sans group/tag"
+                          className="bg-purple-500/5 text-purple-300 px-2.5 py-1 rounded-lg text-sm font-bold flex items-center gap-2 border border-purple-500/10 hover:border-purple-500/30 transition-all cursor-default font-sans group/tag"
                         >
                           {title}
                           <button 
@@ -484,7 +514,7 @@ export const SettingsView: React.FC = () => {
                     <Building size={18} />
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-white">شركات المجموعة</h4>
+                    <h4 className="text-base font-black text-white">شركات المجموعة</h4>
                     <p className="text-[10px] text-blue-400/75">إدارة الكيانات والشركات التابعة</p>
                   </div>
                 </div>
@@ -495,7 +525,7 @@ export const SettingsView: React.FC = () => {
                       type="text"
                       id="new-company"
                       placeholder="شركة جديدة..."
-                      className="flex-1 bg-white/[0.02] border border-white/10 focus:border-blue-500 focus:bg-white/[0.04] rounded-xl py-2 px-3 text-xs text-white outline-none transition-all text-right font-sans placeholder-white/20"
+                      className="flex-1 bg-white/[0.02] border border-white/10 focus:border-blue-500 focus:bg-white/[0.04] rounded-xl py-2 px-3 text-sm text-white outline-none transition-all text-right font-sans placeholder-white/20"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -516,7 +546,7 @@ export const SettingsView: React.FC = () => {
                           input.value = '';
                         }
                       }}
-                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-xl text-xs font-black transition-all hover:shadow-lg hover:shadow-blue-500/10 active:scale-95 flex items-center gap-1 shrink-0"
+                      className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-xl text-sm font-black transition-all hover:shadow-lg hover:shadow-blue-500/10 active:scale-95 flex items-center gap-1 shrink-0"
                     >
                       <Plus size={14} />
                       <span>إضافة</span>
@@ -525,14 +555,14 @@ export const SettingsView: React.FC = () => {
 
                   <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent">
                     {(!settings.companies || settings.companies.length === 0) ? (
-                      <div className="w-full text-center py-8 text-white/20 text-xs">لا توجد شركات مضافة بعد</div>
+                      <div className="w-full text-center py-8 text-white/20 text-sm">لا توجد شركات مضافة بعد</div>
                     ) : (
                       settings.companies.map((comp, i) => (
                         <motion.span 
                           initial={{ scale: 0.9, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           key={i} 
-                          className="bg-blue-500/5 text-blue-300 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-2 border border-blue-500/10 hover:border-blue-500/30 transition-all cursor-default font-sans group/tag"
+                          className="bg-blue-500/5 text-blue-300 px-2.5 py-1 rounded-lg text-sm font-bold flex items-center gap-2 border border-blue-500/10 hover:border-blue-500/30 transition-all cursor-default font-sans group/tag"
                         >
                           {comp}
                           <button 
@@ -557,7 +587,7 @@ export const SettingsView: React.FC = () => {
               <button 
                 type="submit"
                 disabled={loading}
-                className="bg-gradient-to-r from-[#7C3AED] via-[#C084FC] to-[#7C3AED] bg-[length:200%_auto] hover:bg-right text-white px-16 py-3 rounded-xl font-black text-xs flex items-center gap-2.5 transition-all duration-500 shadow-xl shadow-[#7C3AED]/20 hover:shadow-[#7C3AED]/30 disabled:opacity-50 hover:scale-[1.03] active:scale-95 cursor-pointer"
+                className="bg-gradient-to-r from-[#7C3AED] via-[#C084FC] to-[#7C3AED] bg-[length:200%_auto] hover:bg-right text-white px-16 py-3 rounded-xl font-black text-sm flex items-center gap-2.5 transition-all duration-500 shadow-xl shadow-[#7C3AED]/20 hover:shadow-[#7C3AED]/30 disabled:opacity-50 hover:scale-[1.03] active:scale-95 cursor-pointer"
               >
                 <div className={cn(loading ? "animate-spin" : "")}>
                   {loading ? <Clock size={16} /> : <Save size={16} />}

@@ -237,6 +237,8 @@ export const EmployeePortal: React.FC = () => {
       let normalStartTime = "09:00";
       if (currentShift === 'evening') {
         normalStartTime = effectiveSettings.eveningStartTime || "12:00";
+      } else if (currentShift === 'evening2') {
+        normalStartTime = (effectiveSettings as any).evening2StartTime || "13:00";
       } else {
         normalStartTime = effectiveSettings.morningStartTime || "09:00";
       }
@@ -395,12 +397,12 @@ export const EmployeePortal: React.FC = () => {
                 <h4 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-none">
                   {currentInspiration.greeting.replace('{name}', profile?.fullName ? profile.fullName.split(' ')[0] : '')}
                 </h4>
-                <div className="flex items-center gap-1.5 bg-white/5 border border-[#E2B765]/35 px-3.5 py-1.5 rounded-full text-xs text-[#FDE6B0] font-black w-fit h-fit shadow-md backdrop-blur-md">
+                <div className="flex items-center gap-1.5 bg-white/5 border border-[#E2B765]/35 px-3.5 py-1.5 rounded-full text-sm text-[#FDE6B0] font-black w-fit h-fit shadow-md backdrop-blur-md">
                   <Calendar size={14} className="text-[#E2B765]" />
                   <span>{formatCairoDate(new Date(), 'EEEE، dd MMMM yyyy')}</span>
                 </div>
               </div>
-              <p className="text-sm md:text-base text-[#D8B4FE]/90 font-bold leading-relaxed max-w-2xl">
+              <p className="text-base md:text-base text-[#D8B4FE]/90 font-bold leading-relaxed max-w-2xl">
                 {currentInspiration.quote}
               </p>
             </div>
@@ -409,7 +411,7 @@ export const EmployeePortal: React.FC = () => {
           {/* Sparkle decorative side icon or a visual tag */}
           <div className="hidden lg:flex items-center gap-3 bg-white/5 border border-[#E2B765]/20 px-5 py-3 rounded-full relative z-20 shadow-md">
             <span className="w-2.5 h-2.5 rounded-full bg-[#E2B765] animate-pulse" />
-            <span className="text-xs font-black text-[#E2B765] tracking-wider select-none font-mono">AXIS INTERNAL FORCE</span>
+            <span className="text-sm font-black text-[#E2B765] tracking-wider select-none font-mono">AXIS INTERNAL FORCE</span>
           </div>
         </div>
       </motion.div>
@@ -437,7 +439,7 @@ export const EmployeePortal: React.FC = () => {
             {/* 1. Check-In */}
             <div className="bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:bg-white/10 transition-all duration-300 shadow-md group/item hover:border-[#E2B765]/35">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs text-[#A78BFA] font-extrabold">وقت الحضور</span>
+                <span className="text-sm text-[#A78BFA] font-extrabold">وقت الحضور</span>
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                   <UserCheck size={16} />
                 </div>
@@ -461,7 +463,7 @@ export const EmployeePortal: React.FC = () => {
             {/* 2. Check-Out */}
             <div className="bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:bg-white/10 transition-all duration-300 shadow-md group/item hover:border-[#E2B765]/35">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs text-[#A78BFA] font-extrabold">وقت الانصراف</span>
+                <span className="text-sm text-[#A78BFA] font-extrabold">وقت الانصراف</span>
                 <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
                   <UserX size={16} />
                 </div>
@@ -485,7 +487,7 @@ export const EmployeePortal: React.FC = () => {
             {/* 3. Delay Duration */}
             <div className="bg-white/5 backdrop-blur-md p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:bg-white/10 transition-all duration-300 shadow-md group/item hover:border-[#E2B765]/35">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-xs text-[#A78BFA] font-extrabold">مدة التأخير</span>
+                <span className="text-sm text-[#A78BFA] font-extrabold">مدة التأخير</span>
                 <div className="w-8 h-8 rounded-lg bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-400">
                   <Clock size={16} />
                 </div>
@@ -522,7 +524,7 @@ export const EmployeePortal: React.FC = () => {
               <h4 className="text-xl font-black text-white mb-2">توقيت القاهرة</h4>
               <p className="text-5xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-br from-[#FDE6B0] to-[#E2B765] font-mono">
                 {formatLiveClock(currentTime).time}
-                <span className="text-xs font-semibold text-[#E2B765] opacity-75 mr-1">:{formatLiveClock(currentTime).secs}</span>
+                <span className="text-sm font-semibold text-[#E2B765] opacity-75 mr-1">:{formatLiveClock(currentTime).secs}</span>
                 <span className="text-lg font-black text-[#E2B765] mr-2 block mt-2">{formatLiveClock(currentTime).period}</span>
               </p>
            </div>
@@ -530,11 +532,11 @@ export const EmployeePortal: React.FC = () => {
            <div className="mt-8">
               {/* Shift Selector */}
               <div className="mb-6 text-right" dir="rtl">
-                <label className="block text-xs font-black text-[#E2B765] mb-3 mr-1">
+                <label className="block text-sm font-black text-[#E2B765] mb-3 mr-1">
                   نظام الحضور (الشيفت الحالي)
                 </label>
                 
-                <div className="grid grid-cols-2 gap-3.5">
+                <div className="grid grid-cols-3 gap-3.5">
                   {/* Morning Shift Card */}
                   <button
                     type="button"
@@ -574,7 +576,7 @@ export const EmployeePortal: React.FC = () => {
                       )} 
                     />
                     
-                    <span className="text-xs font-black mb-1 block">الشيفت الصباحي</span>
+                    <span className="text-sm font-black mb-1 block">الشيفت الصباحي</span>
                     <span className="text-[10px] font-bold font-mono tracking-tight opacity-80 block">
                       {formatStringTimeTo12Hour(settings?.morningStartTime || "09:00")}
                     </span>
@@ -623,7 +625,7 @@ export const EmployeePortal: React.FC = () => {
                       )} 
                     />
                     
-                    <span className="text-xs font-black mb-1 block">الشيفت المسائي</span>
+                    <span className="text-sm font-black mb-1 block">الشيفت المسائي</span>
                     <span className="text-[10px] font-bold font-mono tracking-tight opacity-80 block">
                       {formatStringTimeTo12Hour(settings?.eveningStartTime || "12:00")}
                     </span>
@@ -632,18 +634,72 @@ export const EmployeePortal: React.FC = () => {
                       {formatStringTimeTo12Hour(settings?.eveningEndTime || "21:00")}
                     </span>
                   </button>
+
+                  {/* Evening Shift 2 Card (NEW third shift, 13:00 - 21:00) */}
+                  <button
+                    type="button"
+                    disabled={loading || !!todayAttendance}
+                    onClick={async () => {
+                      if (loading || !!todayAttendance || (profile?.activeShift || 'morning') === 'evening2') return;
+                      setLoading(true);
+                      try {
+                        await updateDoc(doc(db, 'employees', profile!.id), {
+                          activeShift: 'evening2'
+                        });
+                        toast.success('تم الانتقال إلى الشيفت المسائي بنجاح');
+                      } catch (err: any) {
+                        toast.error('حدث خطأ أثناء حفظ الشيفت: ' + err.message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-4 rounded-2xl border transition-all duration-300 text-center relative overflow-hidden group/btn cursor-pointer",
+                      (profile?.activeShift || 'morning') === 'evening2'
+                        ? "bg-[#E2B765]/20 border-[#E2B765] text-white shadow-[0_4px_20px_rgba(226,183,101,0.25)]"
+                        : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:border-white/20 hover:text-white",
+                      (loading || !!todayAttendance) && "opacity-60 cursor-not-allowed"
+                    )}
+                  >
+                    {/* Background glow for active */}
+                    {(profile?.activeShift || 'morning') === 'evening2' && (
+                      <div className="absolute inset-0 bg-gradient-to-b from-[#E2B765]/10 to-transparent pointer-events-none" />
+                    )}
+
+                    <Moon
+                      size={18}
+                      className={cn(
+                        "mb-2.5 transition-transform duration-300 group-hover/btn:scale-110",
+                        (profile?.activeShift || 'morning') === 'evening2' ? "text-[#E2B765]" : "text-white/40"
+                      )}
+                    />
+
+                    <span className="text-sm font-black mb-1 block">الشيفت المسائي</span>
+                    <span className="text-[10px] font-bold font-mono tracking-tight opacity-80 block">
+                      {formatStringTimeTo12Hour((settings as any)?.evening2StartTime || "13:00")}
+                    </span>
+                    <span className="text-[9px] opacity-40 font-bold block my-0.5">إلى</span>
+                    <span className="text-[10px] font-bold font-mono tracking-tight opacity-80 block">
+                      {formatStringTimeTo12Hour((settings as any)?.evening2EndTime || "21:00")}
+                    </span>
+                  </button>
                 </div>
 
                 {!!todayAttendance && (
                   <p className="text-[10px] text-white/40 mt-2.5 mr-1 font-medium leading-relaxed">
-                    * تم إقفال تعديل الشيفت اليوم لتسجيل حضورك بالفعل بنظام ({todayAttendance.shift === 'evening' ? 'الشيفت المسائي' : 'الشيفت الصباحي'}).
+                    * تم إقفال تعديل الشيفت اليوم لتسجيل حضورك بالفعل بنظام ({
+                      todayAttendance.shift === 'evening2' ? 'الشيفت المسائي (13:00)' :
+                      todayAttendance.shift === 'evening' ? 'الشيفت المسائي' : 'الشيفت الصباحي'
+                    }).
                   </p>
                 )}
               </div>
               {(() => {
                 if (approvedPermission) {
                   const currentShift = profile?.activeShift || 'morning';
-                  const normalStartTime = currentShift === 'evening'
+                  const normalStartTime = currentShift === 'evening2'
+                    ? ((settings as any)?.evening2StartTime || "13:00")
+                    : currentShift === 'evening'
                     ? (settings?.eveningStartTime || "12:00")
                     : (settings?.morningStartTime || "09:00");
                   const permFrom = approvedPermission.fromTime || "09:00";
@@ -653,7 +709,7 @@ export const EmployeePortal: React.FC = () => {
                   if (isMorningPermission) {
                     return (
                       <div className="mb-4 bg-amber-500/10 border border-amber-500/20 p-4 rounded-[1.5rem] text-right space-y-1 shadow-md" dir="rtl">
-                        <p className="text-[#E2B765] font-extrabold text-xs flex items-center justify-start gap-1">
+                        <p className="text-[#E2B765] font-extrabold text-sm flex items-center justify-start gap-1">
                           <Clock size={14} />
                           <span>إذن حضور صباحي معتمد</span>
                         </p>
@@ -668,7 +724,7 @@ export const EmployeePortal: React.FC = () => {
                   } else {
                     return (
                       <div className="mb-4 bg-blue-500/10 border border-blue-500/20 p-4 rounded-[1.5rem] text-right space-y-1 shadow-md" dir="rtl">
-                        <p className="text-blue-400 font-extrabold text-xs flex items-center justify-start gap-1">
+                        <p className="text-blue-400 font-extrabold text-sm flex items-center justify-start gap-1">
                           <Clock size={14} />
                           <span>إذن مغادرة مؤقتة معتمد اليوم</span>
                         </p>
@@ -690,7 +746,7 @@ export const EmployeePortal: React.FC = () => {
                      <UserX size={18} />
                    </div>
                    <div>
-                     <p className="text-rose-400 font-extrabold text-xs">تفعيل البصمة مغلق على الهاتف</p>
+                     <p className="text-rose-400 font-extrabold text-sm">تفعيل البصمة مغلق على الهاتف</p>
                      <p className="text-[10px] text-white/50 leading-relaxed font-bold mt-1" dir="rtl">
                        تسجيل الحضور والانصراف متاح فقط عبر أجهزة الكومبيوتر أو اللابتوب المعتمدة لضمان أمان معلومات اليومية.
                      </p>
@@ -757,7 +813,7 @@ export const EmployeePortal: React.FC = () => {
               <item.icon size={28} />
             </div>
             <h5 className="font-black text-2xl mb-2 text-white group-hover:text-[#FDE6B0] transition-colors">{item.label}</h5>
-            <p className="text-sm text-[#A78BFA] font-medium leading-relaxed">{item.desc}</p>
+            <p className="text-base text-[#A78BFA] font-medium leading-relaxed">{item.desc}</p>
             <div className="absolute top-0 right-0 w-24 h-24 bg-[#E2B765]/5 rounded-bl-[4rem] group-hover:translate-x-4 group-hover:-translate-y-4 transition-transform z-0" />
           </motion.button>
         ))}
@@ -795,7 +851,7 @@ export const EmployeePortal: React.FC = () => {
                 </div>
                 <div>
                   <h4 className="text-2xl md:text-3xl font-black text-[#FDE6B0] mb-1 md:mb-2">{selectedRequest.label}</h4>
-                  <p className="text-[#A78BFA] text-sm md:text-lg">بوابة تقديم الطلبات الإدارية</p>
+                  <p className="text-[#A78BFA] text-base md:text-lg">بوابة تقديم الطلبات الإدارية</p>
                 </div>
               </div>
 
@@ -806,17 +862,17 @@ export const EmployeePortal: React.FC = () => {
                   <button 
                     type="button" 
                     onClick={() => setDateType('today')}
-                    className={cn("py-2.5 md:py-3 rounded-xl text-[11px] md:text-xs font-black transition-all", dateType === 'today' ? "bg-white/10 text-white shadow-inner" : "text-[#A78BFA]")}
+                    className={cn("py-2.5 md:py-3 rounded-xl text-[11px] md:text-sm font-black transition-all", dateType === 'today' ? "bg-white/10 text-white shadow-inner" : "text-[#A78BFA]")}
                   >اليوم</button>
                   <button 
                     type="button" 
                     onClick={() => setDateType('tomorrow')}
-                    className={cn("py-2.5 md:py-3 rounded-xl text-[11px] md:text-xs font-black transition-all", dateType === 'tomorrow' ? "bg-white/10 text-white shadow-inner" : "text-[#A78BFA]")}
+                    className={cn("py-2.5 md:py-3 rounded-xl text-[11px] md:text-sm font-black transition-all", dateType === 'tomorrow' ? "bg-white/10 text-white shadow-inner" : "text-[#A78BFA]")}
                   >غداً</button>
                   <button 
                     type="button" 
                     onClick={() => setDateType('custom')}
-                    className={cn("py-2.5 md:py-3 rounded-xl text-[11px] md:text-xs font-black transition-all", dateType === 'custom' ? "bg-white/10 text-white shadow-inner" : "text-[#A78BFA]")}
+                    className={cn("py-2.5 md:py-3 rounded-xl text-[11px] md:text-sm font-black transition-all", dateType === 'custom' ? "bg-white/10 text-white shadow-inner" : "text-[#A78BFA]")}
                   >تاريخ مخصص</button>
                 </div>
 
@@ -869,7 +925,7 @@ export const EmployeePortal: React.FC = () => {
                         <select
                           value={selectedRequest.type}
                           onChange={e => setSelectedRequest(prev => prev ? { ...prev, type: e.target.value } : null)}
-                          className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-4 md:py-5 px-4 md:px-6 text-white text-sm md:text-md font-black focus:border-[#C084FC] outline-none text-right font-sans"
+                          className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-4 md:py-5 px-4 md:px-6 text-white text-base md:text-md font-black focus:border-[#C084FC] outline-none text-right font-sans"
                         >
                           <option value="vacation_regular">إجازة اعتيادية / عارضة</option>
                           <option value="vacation_sick">إجازة مرضية طارئة</option>
@@ -910,7 +966,7 @@ export const EmployeePortal: React.FC = () => {
                       value={requestForm.reason}
                       onChange={e => setRequestForm({...requestForm, reason: e.target.value})}
                       placeholder="اشرح سبب الطلب بوضوح للإدارة..."
-                      className="w-full bg-white/5 border border-white/10 rounded-2xl md:rounded-[2rem] py-4 md:py-6 px-5 md:px-8 text-white text-sm md:text-base font-medium outline-none focus:border-[#C084FC]/50 transition-all resize-none placeholder:text-white/20"
+                      className="w-full bg-white/5 border border-white/10 rounded-2xl md:rounded-[2rem] py-4 md:py-6 px-5 md:px-8 text-white text-base md:text-base font-medium outline-none focus:border-[#C084FC]/50 transition-all resize-none placeholder:text-white/20"
                     />
                   </div>
                 </div>

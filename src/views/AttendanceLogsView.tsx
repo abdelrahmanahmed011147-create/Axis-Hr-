@@ -558,7 +558,7 @@ export const AttendanceLogsView: React.FC = () => {
         row.getCell('B').value = emp.roleCode;
         row.getCell('C').value = emp.fullName;
         row.getCell('D').value = emp.department;
-        row.getCell('E').value = (emp.activeShift === 'evening') ? 'الشيفت المسائي' : 'الشيفت الصباحي';
+        row.getCell('E').value = (emp.activeShift === 'evening2') ? 'الشيفت المسائي (13:00)' : (emp.activeShift === 'evening') ? 'الشيفت المسائي' : 'الشيفت الصباحي';
         row.getCell('F').value = stats.presentDays;
         row.getCell('G').value = stats.totalDelay ? formatDelayToArabic(stats.totalDelay) : 'لا يوجد';
         row.getCell('H').value = stats.totalDeductions; // total deduction days
@@ -850,7 +850,7 @@ export const AttendanceLogsView: React.FC = () => {
             
             row.getCell('J').value = log.deductionReason || '---';
             row.getCell('K').value = logStatus;
-            row.getCell('L').value = (log.shift === 'evening') ? 'الشيفت المسائي' : 'الشيفت الصباحي';
+            row.getCell('L').value = (log.shift === 'evening2') ? 'الشيفت المسائي (13:00)' : (log.shift === 'evening') ? 'الشيفت المسائي' : 'الشيفت الصباحي';
 
             const isEven = idx % 2 === 0;
             const rowBg = isEven ? 'FFFFFF' : 'F9F5FF';
@@ -976,7 +976,7 @@ export const AttendanceLogsView: React.FC = () => {
           <Calendar size={32} />
         </div>
         <h2 className="text-xl font-bold text-red-400">غير مصرح بالوصول</h2>
-        <p className="text-sm text-[#A78BFA] mt-2">عذراً، هذه الصفحة مخصصة لمدراء النظام فقط ولا يسمح للموظفين بالاطلاع على سجلات الحضور العامة.</p>
+        <p className="text-base text-[#A78BFA] mt-2">عذراً، هذه الصفحة مخصصة لمدراء النظام فقط ولا يسمح للموظفين بالاطلاع على سجلات الحضور العامة.</p>
       </div>
     );
   }
@@ -998,7 +998,7 @@ export const AttendanceLogsView: React.FC = () => {
               setSearchTerm('');
             }}
             className={cn(
-              "flex-1 px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 whitespace-nowrap",
+              "flex-1 px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 whitespace-nowrap",
               activeTab === 'daily'
                 ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/20"
                 : "text-[#A78BFA] hover:text-white"
@@ -1013,7 +1013,7 @@ export const AttendanceLogsView: React.FC = () => {
               setSearchTerm('');
             }}
             className={cn(
-              "flex-1 px-6 py-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 whitespace-nowrap",
+              "flex-1 px-6 py-3 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 whitespace-nowrap",
               activeTab === 'monthly'
                 ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/20"
                 : "text-[#A78BFA] hover:text-white"
@@ -1070,7 +1070,7 @@ export const AttendanceLogsView: React.FC = () => {
               <div className="flex items-center gap-3 w-full md:w-auto justify-center">
                 <button
                   onClick={handlePrevDay}
-                  className="bg-white/5 hover:bg-white/10 text-white px-4 py-3 rounded-xl border border-white/10 transition-all text-xs font-bold flex items-center gap-2 active:scale-95"
+                  className="bg-white/5 hover:bg-white/10 text-white px-4 py-3 rounded-xl border border-white/10 transition-all text-sm font-bold flex items-center gap-2 active:scale-95"
                 >
                   <ChevronRight size={16} />
                   <span>اليوم السابق</span>
@@ -1080,7 +1080,7 @@ export const AttendanceLogsView: React.FC = () => {
                   onClick={handleGoToToday}
                   disabled={selectedDailyDate === formatCairoDate(new Date())}
                   className={cn(
-                    "px-5 py-3 rounded-xl transition-all text-xs font-black border active:scale-95",
+                    "px-5 py-3 rounded-xl transition-all text-sm font-black border active:scale-95",
                     selectedDailyDate === formatCairoDate(new Date())
                       ? "bg-[#7C3AED]/10 text-[#A78BFA]/50 border-white/5"
                       : "bg-[#7C3AED]/20 hover:bg-[#7C3AED] text-white border-[#7C3AED]/30"
@@ -1093,7 +1093,7 @@ export const AttendanceLogsView: React.FC = () => {
                   onClick={handleNextDay}
                   disabled={selectedDailyDate >= formatCairoDate(new Date())}
                   className={cn(
-                    "px-4 py-3 rounded-xl border transition-all text-xs font-bold flex items-center gap-2 active:scale-95",
+                    "px-4 py-3 rounded-xl border transition-all text-sm font-bold flex items-center gap-2 active:scale-95",
                     selectedDailyDate >= formatCairoDate(new Date())
                       ? "opacity-30 cursor-not-allowed bg-white/5 text-white/50 border-white/5"
                       : "bg-white/5 hover:bg-white/10 text-white border-white/10"
@@ -1124,7 +1124,7 @@ export const AttendanceLogsView: React.FC = () => {
                     <div>
                       <p className="text-[10px] text-emerald-400 font-bold mb-1">المتواجدون اليوم</p>
                       <h4 className="text-3xl font-black text-emerald-400 font-mono">
-                        {stats.totalPresent} <span className="text-xs opacity-60 font-sans">/ {employees.length - stats.totalExempt}</span>
+                        {stats.totalPresent} <span className="text-sm opacity-60 font-sans">/ {employees.length - stats.totalExempt}</span>
                       </h4>
                       <p className="text-[10px] text-white/50 mt-1 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -1222,7 +1222,7 @@ export const AttendanceLogsView: React.FC = () => {
                   <Search size={20} className="absolute right-5 top-1/2 -translate-y-1/2 text-[#7C3AED]" />
                   <input
                     placeholder="البحث باسم الموظف، الكود أو القسم..."
-                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pr-12 pl-6 text-sm focus:outline-none focus:border-[#C084FC]/50 transition-all placeholder:text-[#A78BFA]/30 text-white shadow-inner"
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pr-12 pl-6 text-base focus:outline-none focus:border-[#C084FC]/50 transition-all placeholder:text-[#A78BFA]/30 text-white shadow-inner"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -1234,7 +1234,7 @@ export const AttendanceLogsView: React.FC = () => {
                     animate={{ opacity: 1, scale: 1 }}
                     className="flex items-center justify-between gap-3 bg-[#7C3AED]/20 border border-[#7C3AED]/30 px-5 py-3 rounded-2xl shrink-0"
                   >
-                    <span className="text-xs font-black text-white">
+                    <span className="text-sm font-black text-white">
                       تصفية: {" "}
                       <span className="text-[#C084FC]">
                         {dailyStatusFilter === 'present' && "المتواجدون اليوم"}
@@ -1261,13 +1261,13 @@ export const AttendanceLogsView: React.FC = () => {
                   <table className="w-full text-right border-collapse min-w-[900px]">
                     <thead>
                       <tr className="border-b border-white/5 bg-white/[0.02]">
-                        <th className="py-6 px-8 text-xs text-[#A78BFA] font-black uppercase tracking-wider">الموظف</th>
-                        <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">الحالة اليومية</th>
-                        <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">نوع الشيفت</th>
-                        <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">وقت الحضور</th>
-                        <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">وقت الانصراف</th>
-                        <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">الخصم والتأخير</th>
-                        <th className="py-6 px-8 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-left">التفاصيل</th>
+                        <th className="py-6 px-8 text-sm text-[#A78BFA] font-black uppercase tracking-wider">الموظف</th>
+                        <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">الحالة اليومية</th>
+                        <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">نوع الشيفت</th>
+                        <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">وقت الحضور</th>
+                        <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">وقت الانصراف</th>
+                        <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">الخصم والتأخير</th>
+                        <th className="py-6 px-8 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-left">التفاصيل</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1314,7 +1314,7 @@ export const AttendanceLogsView: React.FC = () => {
                                     {emp.fullName.charAt(0)}
                                   </div>
                                   <div>
-                                    <h5 className="font-black text-sm text-white group-hover:text-[#C084FC] transition-colors">{emp.fullName}</h5>
+                                    <h5 className="font-black text-base text-white group-hover:text-[#C084FC] transition-colors">{emp.fullName}</h5>
                                     <p className="text-[10px] text-[#A78BFA] font-mono">{emp.roleCode} • {emp.department}</p>
                                   </div>
                                 </div>
@@ -1372,6 +1372,13 @@ export const AttendanceLogsView: React.FC = () => {
                               <td className="py-5 px-6 text-center">
                                 {(() => {
                                   const shiftVal = status.log?.shift || emp.activeShift || 'morning';
+                                  if (shiftVal === 'evening2') {
+                                    return (
+                                      <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/20">
+                                        الشيفت المسائي (13:00)
+                                      </span>
+                                    );
+                                  }
                                   return shiftVal === 'evening' ? (
                                     <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-black bg-purple-500/10 text-purple-400 border border-purple-500/20">
                                       الشيفت المسائي
@@ -1387,11 +1394,11 @@ export const AttendanceLogsView: React.FC = () => {
                               {/* Check-In Time */}
                               <td className="py-5 px-6 text-center">
                                 {status.log && status.log.checkInTime ? (
-                                  <span className="font-mono text-xs font-bold text-white bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5">
+                                  <span className="font-mono text-sm font-bold text-white bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5">
                                     {formatTimeTo12Hour(new Date(status.log.checkInTime.seconds * 1000))}
                                   </span>
                                 ) : (
-                                  <span className="text-white/30 text-xs">---</span>
+                                  <span className="text-white/30 text-sm">---</span>
                                 )}
                               </td>
 
@@ -1399,7 +1406,7 @@ export const AttendanceLogsView: React.FC = () => {
                               <td className="py-5 px-6 text-center">
                                 {status.log ? (
                                   status.log.checkOutTime ? (
-                                    <span className="font-mono text-xs font-bold text-white bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5">
+                                    <span className="font-mono text-sm font-bold text-white bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5">
                                       {formatTimeTo12Hour(new Date(status.log.checkOutTime.seconds * 1000))}
                                     </span>
                                   ) : (
@@ -1408,14 +1415,14 @@ export const AttendanceLogsView: React.FC = () => {
                                     </span>
                                   )
                                 ) : (
-                                  <span className="text-white/30 text-xs">---</span>
+                                  <span className="text-white/30 text-sm">---</span>
                                 )}
                               </td>
 
                               {/* Deductions and Delays */}
                               <td className="py-5 px-6 text-center">
                                 {status.log && (status.log.delayMinutes || status.log.deductionValue) ? (
-                                  <div className="text-xs space-y-1">
+                                  <div className="text-sm space-y-1">
                                     {status.log.delayMinutes > 0 && (
                                       <p className="text-orange-400 font-bold">تأخير {formatDelayToArabic(status.log.delayMinutes)}</p>
                                     )}
@@ -1431,7 +1438,7 @@ export const AttendanceLogsView: React.FC = () => {
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="text-white/30 text-xs">---</span>
+                                  <span className="text-white/30 text-sm">---</span>
                                 )}
                               </td>
 
@@ -1472,22 +1479,22 @@ export const AttendanceLogsView: React.FC = () => {
                 <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 shrink-0">
                   <button 
                     onClick={() => setDateFilter('current')}
-                    className={cn("px-5 py-2.5 rounded-xl text-xs font-black transition-all", dateFilter === 'current' ? "bg-[#7C3AED] text-white shadow-md" : "text-[#A78BFA] hover:text-white")}
+                    className={cn("px-5 py-2.5 rounded-xl text-sm font-black transition-all", dateFilter === 'current' ? "bg-[#7C3AED] text-white shadow-md" : "text-[#A78BFA] hover:text-white")}
                   >الشهر الحالي</button>
                   <button 
                     onClick={() => setDateFilter('last')}
-                    className={cn("px-5 py-2.5 rounded-xl text-xs font-black transition-all", dateFilter === 'last' ? "bg-[#7C3AED] text-white shadow-md" : "text-[#A78BFA] hover:text-white")}
+                    className={cn("px-5 py-2.5 rounded-xl text-sm font-black transition-all", dateFilter === 'last' ? "bg-[#7C3AED] text-white shadow-md" : "text-[#A78BFA] hover:text-white")}
                   >الشهر الماضي</button>
                   <button 
                     onClick={() => setDateFilter('custom')}
-                    className={cn("px-5 py-2.5 rounded-xl text-xs font-black transition-all", dateFilter === 'custom' ? "bg-[#7C3AED] text-white shadow-md" : "text-[#A78BFA] hover:text-white")}
+                    className={cn("px-5 py-2.5 rounded-xl text-sm font-black transition-all", dateFilter === 'custom' ? "bg-[#7C3AED] text-white shadow-md" : "text-[#A78BFA] hover:text-white")}
                   >تاريخ مخصص</button>
                 </div>
               </div>
 
               <button 
                 onClick={exportToExcel}
-                className="w-full lg:w-auto bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3.5 rounded-xl font-black text-xs flex items-center justify-center gap-2.5 transition-all shadow-xl shadow-emerald-500/20 active:scale-95"
+                className="w-full lg:w-auto bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2.5 transition-all shadow-xl shadow-emerald-500/20 active:scale-95"
               >
                 <Download size={16} />
                 تصدير تقرير Excel الفاخر
@@ -1509,7 +1516,7 @@ export const AttendanceLogsView: React.FC = () => {
                       type="date"
                       value={startDate}
                       onChange={e => setStartDate(e.target.value)}
-                      className="w-full bg-[#12071F] border border-white/10 rounded-xl py-3 px-5 text-white text-xs font-mono outline-none focus:border-[#7C3AED] transition-all"
+                      className="w-full bg-[#12071F] border border-white/10 rounded-xl py-3 px-5 text-white text-sm font-mono outline-none focus:border-[#7C3AED] transition-all"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1518,7 +1525,7 @@ export const AttendanceLogsView: React.FC = () => {
                       type="date"
                       value={endDate}
                       onChange={e => setEndDate(e.target.value)}
-                      className="w-full bg-[#12071F] border border-white/10 rounded-xl py-3 px-5 text-white text-xs font-mono outline-none focus:border-[#7C3AED] transition-all"
+                      className="w-full bg-[#12071F] border border-white/10 rounded-xl py-3 px-5 text-white text-sm font-mono outline-none focus:border-[#7C3AED] transition-all"
                     />
                   </div>
                 </motion.div>
@@ -1530,7 +1537,7 @@ export const AttendanceLogsView: React.FC = () => {
               <Search size={20} className="absolute right-5 top-1/2 -translate-y-1/2 text-[#7C3AED]" />
               <input 
                 placeholder="ابحث باسم الموظف أو الكود أو القسم..."
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pr-12 pl-6 text-sm focus:outline-none focus:border-[#C084FC]/50 transition-all placeholder:text-[#A78BFA]/30 text-white shadow-inner"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pr-12 pl-6 text-base focus:outline-none focus:border-[#C084FC]/50 transition-all placeholder:text-[#A78BFA]/30 text-white shadow-inner"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
@@ -1544,12 +1551,12 @@ export const AttendanceLogsView: React.FC = () => {
                 <table className="w-full text-right border-collapse min-w-[950px]">
                   <thead>
                     <tr className="border-b border-white/5 bg-white/[0.02]">
-                      <th className="py-6 px-8 text-xs text-[#A78BFA] font-black uppercase tracking-wider">الموظف</th>
-                      <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">أيام الحضور</th>
-                      <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">إجمالي التأخير</th>
-                      <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">أيام الإجازات</th>
-                      <th className="py-6 px-6 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-center">قيمة الخصومات</th>
-                      <th className="py-6 px-8 text-xs text-[#A78BFA] font-black uppercase tracking-wider text-left">الإجراءات</th>
+                      <th className="py-6 px-8 text-sm text-[#A78BFA] font-black uppercase tracking-wider">الموظف</th>
+                      <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">أيام الحضور</th>
+                      <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">إجمالي التأخير</th>
+                      <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">أيام الإجازات</th>
+                      <th className="py-6 px-6 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-center">قيمة الخصومات</th>
+                      <th className="py-6 px-8 text-sm text-[#A78BFA] font-black uppercase tracking-wider text-left">الإجراءات</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1572,7 +1579,7 @@ export const AttendanceLogsView: React.FC = () => {
                                   {emp.fullName.charAt(0)}
                                 </div>
                                 <div>
-                                  <h5 className="font-black text-sm text-white group-hover:text-[#C084FC] transition-colors">{emp.fullName}</h5>
+                                  <h5 className="font-black text-base text-white group-hover:text-[#C084FC] transition-colors">{emp.fullName}</h5>
                                   <p className="text-[10px] text-[#A78BFA] font-mono">{emp.roleCode} • {emp.department}</p>
                                 </div>
                               </div>
@@ -1597,7 +1604,7 @@ export const AttendanceLogsView: React.FC = () => {
                             </td>
                             <td className="py-5 px-8 text-left">
                               <button 
-                                className="bg-[#7C3AED]/20 hover:bg-[#7C3AED] text-white px-5 py-2.5 rounded-xl text-xs font-black transition-all border border-[#7C3AED]/30 flex items-center gap-1.5 shadow-md justify-center"
+                                className="bg-[#7C3AED]/20 hover:bg-[#7C3AED] text-white px-5 py-2.5 rounded-xl text-sm font-black transition-all border border-[#7C3AED]/30 flex items-center gap-1.5 shadow-md justify-center"
                                 onClick={() => {
                                   setSelectedEmployeeId(emp.id);
                                 }}
@@ -1637,11 +1644,11 @@ export const AttendanceLogsView: React.FC = () => {
                     >
                       <div className="flex items-center gap-4">
                         <div className="bg-white/5 px-3 py-2 rounded-xl border border-white/10 text-center min-w-[90px]">
-                          <p className="text-xs font-bold text-[#A78BFA] font-mono mb-0.5">{log.date.split('-')[1]}-{log.date.split('-')[2]}</p>
+                          <p className="text-sm font-bold text-[#A78BFA] font-mono mb-0.5">{log.date.split('-')[1]}-{log.date.split('-')[2]}</p>
                           <p className="text-[9px] opacity-40 font-mono tracking-tighter">{log.date.split('-')[0]}</p>
                         </div>
                         <div>
-                          <h5 className="font-black text-sm text-white">{emp?.fullName || '---'}</h5>
+                          <h5 className="font-black text-base text-white">{emp?.fullName || '---'}</h5>
                           <p className="text-[10px] text-[#A78BFA]">{log.roleCode} • {emp?.department || '---'}</p>
                         </div>
                       </div>
@@ -1649,14 +1656,14 @@ export const AttendanceLogsView: React.FC = () => {
                       <div className="hidden md:flex items-center gap-8">
                         <div className="text-center">
                           <p className="text-[9px] text-[#A78BFA] font-black uppercase mb-0.5">وقت الحضور</p>
-                          <p className="font-mono text-xs text-white bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+                          <p className="font-mono text-sm text-white bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
                             {log.checkInTime ? formatTimeTo12Hour(new Date(log.checkInTime.seconds * 1000)) : '---'}
                           </p>
                         </div>
                         <div className="text-center">
                           <p className="text-[9px] text-[#A78BFA] font-black uppercase mb-0.5">الخصم</p>
                           <div className="flex items-center gap-1.5 justify-center">
-                            <div className={cn("font-black text-xs font-mono bg-white/5 px-2.5 py-1 rounded-lg border border-white/5", log.deductionValue > 0 ? "text-rose-400" : "text-emerald-400")}>
+                            <div className={cn("font-black text-sm font-mono bg-white/5 px-2.5 py-1 rounded-lg border border-white/5", log.deductionValue > 0 ? "text-rose-400" : "text-emerald-400")}>
                               {log.deductionValue > 0 ? (
                                 <div className="text-right">
                                   <span>{log.deductionValue} يوم</span>
@@ -1713,7 +1720,7 @@ export const AttendanceLogsView: React.FC = () => {
                 })}
                 
                 {attendance.length > 50 && (
-                  <p className="text-center text-[#A78BFA] py-4 italic text-xs">يتم عرض أحدث 50 سجلاً فقط. استخدم فلترة التاريخ أو التصدير للعرض الكامل.</p>
+                  <p className="text-center text-[#A78BFA] py-4 italic text-sm">يتم عرض أحدث 50 سجلاً فقط. استخدم فلترة التاريخ أو التصدير للعرض الكامل.</p>
                 )}
               </div>
             </section>
@@ -1742,8 +1749,8 @@ export const AttendanceLogsView: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="text-2xl font-black text-white">{selectedEmployeeLogs.employee.fullName}</h4>
-                    <p className="text-sm text-[#A78BFA] mt-1">
-                      <span className="font-mono bg-[#7C3AED]/10 px-2.5 py-1 rounded-lg text-xs leading-none mr-2">{selectedEmployeeLogs.employee.roleCode}</span>
+                    <p className="text-base text-[#A78BFA] mt-1">
+                      <span className="font-mono bg-[#7C3AED]/10 px-2.5 py-1 rounded-lg text-sm leading-none mr-2">{selectedEmployeeLogs.employee.roleCode}</span>
                       {selectedEmployeeLogs.employee.department} • {selectedEmployeeLogs.employee.jobTitle}
                     </p>
                   </div>
@@ -1763,7 +1770,7 @@ export const AttendanceLogsView: React.FC = () => {
                   <div className="bg-[#120721] p-5 rounded-2xl border border-[#7C3AED]/10 flex items-center justify-between">
                     <div>
                       <p className="text-[11px] text-[#A78BFA] font-black uppercase mb-1">أيام الحضور الفعلي</p>
-                      <h5 className="text-2xl font-black text-emerald-400 font-mono">{selectedEmployeeLogs.stats.presentDays} <span className="text-xs opacity-60 font-sans">أيام</span></h5>
+                      <h5 className="text-2xl font-black text-emerald-400 font-mono">{selectedEmployeeLogs.stats.presentDays} <span className="text-sm opacity-60 font-sans">أيام</span></h5>
                     </div>
                     <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-400">
                       <Clock size={20} />
@@ -1773,7 +1780,7 @@ export const AttendanceLogsView: React.FC = () => {
                   <div className="bg-[#120721] p-5 rounded-2xl border border-[#7C3AED]/10 flex items-center justify-between">
                     <div>
                       <p className="text-[11px] text-[#A78BFA] font-black uppercase mb-1">إجمالي الأذونات المعتمدة</p>
-                      <h5 className="text-2xl font-black text-blue-400 font-mono">{selectedEmployeeLogs.stats.approvedPermissionHours} <span className="text-xs opacity-60 font-sans">ساعات</span></h5>
+                      <h5 className="text-2xl font-black text-blue-400 font-mono">{selectedEmployeeLogs.stats.approvedPermissionHours} <span className="text-sm opacity-60 font-sans">ساعات</span></h5>
                     </div>
                     <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400">
                       <Coffee size={20} />
@@ -1783,7 +1790,7 @@ export const AttendanceLogsView: React.FC = () => {
                   <div className="bg-[#120721] p-5 rounded-2xl border border-[#7C3AED]/10 flex items-center justify-between">
                     <div>
                       <p className="text-[11px] text-[#A78BFA] font-black uppercase mb-1">إجمالي الإجازات المعتمدة</p>
-                      <h5 className="text-2xl font-black text-[#C084FC] font-mono">{selectedEmployeeLogs.stats.approvedVacationDays} <span className="text-xs opacity-60 font-sans">أيام</span></h5>
+                      <h5 className="text-2xl font-black text-[#C084FC] font-mono">{selectedEmployeeLogs.stats.approvedVacationDays} <span className="text-sm opacity-60 font-sans">أيام</span></h5>
                     </div>
                     <div className="w-10 h-10 bg-[#7C3AED]/10 rounded-xl flex items-center justify-center text-[#C084FC]">
                       <Sun size={20} />
@@ -1793,7 +1800,7 @@ export const AttendanceLogsView: React.FC = () => {
                   <div className="bg-[#120721] p-5 rounded-2xl border border-[#7C3AED]/10 flex items-center justify-between">
                     <div>
                       <p className="text-[11px] text-[#A78BFA] font-black uppercase mb-1">إجمالي الخصومات</p>
-                      <h5 className="text-2xl font-black text-rose-400 font-mono">-{selectedEmployeeLogs.stats.totalDeductions} <span className="text-xs opacity-60 font-sans">ج.م</span></h5>
+                      <h5 className="text-2xl font-black text-rose-400 font-mono">-{selectedEmployeeLogs.stats.totalDeductions} <span className="text-sm opacity-60 font-sans">ج.م</span></h5>
                     </div>
                     <div className="w-10 h-10 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-400">
                       <FileText size={20} />
@@ -1803,7 +1810,7 @@ export const AttendanceLogsView: React.FC = () => {
 
                 {/* Individual Logs List */}
                 <div className="space-y-4">
-                  <h5 className="text-sm font-black text-white flex items-center gap-2">
+                  <h5 className="text-base font-black text-white flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-[#7C3AED]" />
                     سجل الحركات اليومي خلال الفترة المحددة
                   </h5>
@@ -1816,7 +1823,7 @@ export const AttendanceLogsView: React.FC = () => {
                         <div key={log.id} className="bg-[#120721]/60 border border-white/5 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-[#7C3AED]/20 transition-all">
                           <div className="flex items-center gap-4">
                             <div className="bg-white/5 px-3 py-2 rounded-xl text-center font-mono">
-                              <span className="text-xs text-[#A78BFA] block leading-none">{log.date}</span>
+                              <span className="text-sm text-[#A78BFA] block leading-none">{log.date}</span>
                             </div>
                             <div>
                               <span className={cn(
@@ -1831,26 +1838,26 @@ export const AttendanceLogsView: React.FC = () => {
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 flex-1 text-center md:text-right">
                             <div>
                               <p className="text-[9px] text-[#A78BFA] uppercase">الحضور</p>
-                              <p className="text-xs font-sans font-bold text-white">
+                              <p className="text-sm font-sans font-bold text-white">
                                 {log.checkInTime ? formatTimeTo12Hour(new Date(log.checkInTime.seconds * 1000)) : '---'}
                               </p>
                             </div>
                             <div>
                               <p className="text-[9px] text-[#A78BFA] uppercase">الانصراف</p>
-                              <p className="text-xs font-sans font-bold text-white">
+                              <p className="text-sm font-sans font-bold text-white">
                                 {log.checkOutTime ? formatTimeTo12Hour(new Date(log.checkOutTime.seconds * 1000)) : '---'}
                               </p>
                             </div>
                             <div>
                               <p className="text-[9px] text-[#A78BFA] uppercase">التأخير</p>
-                              <p className="text-xs font-bold text-[#A78BFA]">
+                              <p className="text-sm font-bold text-[#A78BFA]">
                                 {log.delayMinutes ? formatDelayToArabic(log.delayMinutes) : 'لا يوجد'}
                               </p>
                             </div>
                             <div>
                               <p className="text-[9px] text-[#A78BFA] uppercase">الخصم</p>
                               <div className="flex items-center gap-1.5 justify-center md:justify-start">
-                                <div className={cn("text-xs font-black font-mono", log.deductionValue > 0 ? "text-rose-400" : "text-emerald-400")}>
+                                <div className={cn("text-sm font-black font-mono", log.deductionValue > 0 ? "text-rose-400" : "text-emerald-400")}>
                                   {log.deductionValue > 0 ? (
                                     <div>
                                       <span>{log.deductionValue} يوم</span>
@@ -1891,7 +1898,7 @@ export const AttendanceLogsView: React.FC = () => {
               <div className="p-6 bg-[#130722] border-t border-white/5 flex justify-end">
                 <button 
                   onClick={() => setSelectedEmployeeId(null)}
-                  className="bg-white/5 hover:bg-white/10 text-white px-8 py-3 rounded-2xl text-xs font-black transition-all"
+                  className="bg-white/5 hover:bg-white/10 text-white px-8 py-3 rounded-2xl text-sm font-black transition-all"
                 >
                   إغلاق السجل
                 </button>
@@ -1934,25 +1941,25 @@ export const AttendanceLogsView: React.FC = () => {
 
               <div className="p-6 space-y-5 relative">
                 <div>
-                  <label className="block text-xs font-black text-[#A78BFA] mb-2">عدد أيام الخصم</label>
+                  <label className="block text-sm font-black text-[#A78BFA] mb-2">عدد أيام الخصم</label>
                   <input 
                     type="number"
                     min="0"
                     step="0.25"
                     value={editDeductionValue}
                     onChange={(e) => setEditDeductionValue(Number(e.target.value))}
-                    className="w-full bg-[#120721]/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold font-mono focus:outline-none focus:border-[#7C3AED] transition-colors"
+                    className="w-full bg-[#120721]/80 border border-white/10 rounded-xl px-4 py-3 text-white text-base font-bold font-mono focus:outline-none focus:border-[#7C3AED] transition-colors"
                     placeholder="مثال: 1 أو 0.5"
                   />
                   <p className="text-[10px] text-[#A78BFA]/60 mt-1.5">أدخل 0 لإلغاء الخصم لهذا اليوم بالكامل.</p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-black text-[#A78BFA] mb-2">سبب الخصم / ملاحظات</label>
+                  <label className="block text-sm font-black text-[#A78BFA] mb-2">سبب الخصم / ملاحظات</label>
                   <textarea 
                     value={editDeductionReason}
                     onChange={(e) => setEditDeductionReason(e.target.value)}
-                    className="w-full bg-[#120721]/80 border border-white/10 rounded-xl px-4 py-3 text-white text-xs font-bold focus:outline-none focus:border-[#7C3AED] transition-colors h-24 resize-none"
+                    className="w-full bg-[#120721]/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold focus:outline-none focus:border-[#7C3AED] transition-colors h-24 resize-none"
                     placeholder="اكتب سبب تعديل الخصم أو سبب الخصم الفعلي..."
                   />
                 </div>
@@ -1961,14 +1968,14 @@ export const AttendanceLogsView: React.FC = () => {
               <div className="p-5 bg-[#130722] border-t border-white/5 flex gap-3 justify-end">
                 <button 
                   onClick={() => setEditingLog(null)}
-                  className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-xs font-black transition-all"
+                  className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl text-sm font-black transition-all"
                   disabled={savingEdit}
                 >
                   إلغاء
                 </button>
                 <button 
                   onClick={handleSaveDeduction}
-                  className="px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-lg shadow-rose-950/20 disabled:opacity-50"
+                  className="px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-sm font-black transition-all flex items-center gap-1.5 shadow-lg shadow-rose-950/20 disabled:opacity-50"
                   disabled={savingEdit}
                 >
                   {savingEdit ? 'جاري الحفظ...' : 'حفظ التعديل'}

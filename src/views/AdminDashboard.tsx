@@ -300,7 +300,7 @@ export const AdminDashboard: React.FC = () => {
           <Shield size={32} />
         </div>
         <h2 className="text-xl font-bold text-red-400">غير مصرح بالوصول</h2>
-        <p className="text-sm text-[#A78BFA] mt-2">عذراً، هذه الصفحة مخصصة لمدراء النظام فقط ولا يسمح للموظفين بالاطلاع على طلبات زملائهم أو تعديلها.</p>
+        <p className="text-base text-[#A78BFA] mt-2">عذراً، هذه الصفحة مخصصة لمدراء النظام فقط ولا يسمح للموظفين بالاطلاع على طلبات زملائهم أو تعديلها.</p>
       </div>
     );
   }
@@ -327,7 +327,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-10 pb-6 border-b border-white/5">
             <div>
               <h3 className="text-3xl font-black">إدارة وتدقيق طلبات الموظفين</h3>
-              <p className="text-xs text-[#A78BFA] uppercase tracking-widest mt-1">تتبع، قبول ورفض طلبات الإجازات والاستئذانات</p>
+              <p className="text-sm text-[#A78BFA] uppercase tracking-widest mt-1">تتبع، قبول ورفض طلبات الإجازات والاستئذانات</p>
             </div>
             
             {/* Expanded Status Tabs */}
@@ -335,7 +335,7 @@ export const AdminDashboard: React.FC = () => {
               <button 
                 onClick={() => setRequestFilter('Pending')}
                 className={cn(
-                  "px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2", 
+                  "px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2", 
                   requestFilter === 'Pending' 
                     ? "bg-amber-500 text-white shadow-lg shadow-amber-500/20" 
                     : "text-[#A78BFA] hover:text-white hover:bg-white/5"
@@ -350,7 +350,7 @@ export const AdminDashboard: React.FC = () => {
               <button 
                 onClick={() => setRequestFilter('Approved')}
                 className={cn(
-                  "px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2", 
+                  "px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2", 
                   requestFilter === 'Approved' 
                     ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20" 
                     : "text-[#A78BFA] hover:text-white hover:bg-white/5"
@@ -365,7 +365,7 @@ export const AdminDashboard: React.FC = () => {
               <button 
                 onClick={() => setRequestFilter('Rejected')}
                 className={cn(
-                  "px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2", 
+                  "px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2", 
                   requestFilter === 'Rejected' 
                     ? "bg-red-500 text-white shadow-lg shadow-red-500/20" 
                     : "text-[#A78BFA] hover:text-white hover:bg-white/5"
@@ -380,7 +380,7 @@ export const AdminDashboard: React.FC = () => {
               <button 
                 onClick={() => setRequestFilter('All')}
                 className={cn(
-                  "px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2", 
+                  "px-5 py-2.5 rounded-xl text-sm font-black transition-all flex items-center gap-2", 
                   requestFilter === 'All' 
                     ? "bg-[#7C3AED] text-white shadow-lg shadow-[#7C3AED]/20" 
                     : "text-[#A78BFA] hover:text-white hover:bg-white/5"
@@ -404,7 +404,7 @@ export const AdminDashboard: React.FC = () => {
               <input 
                 type="text"
                 placeholder="ابحث باسم الموظف، الكود، أو السبب..."
-                className="w-full bg-[#12071F]/40 border border-white/10 rounded-2xl py-3.5 pr-12 pl-4 text-sm text-white outline-none focus:border-[#7C3AED]/50 focus:ring-1 focus:ring-[#7C3AED]/20 transition-all text-right"
+                className="w-full bg-[#12071F]/40 border border-white/10 rounded-2xl py-3.5 pr-12 pl-4 text-base text-white outline-none focus:border-[#7C3AED]/50 focus:ring-1 focus:ring-[#7C3AED]/20 transition-all text-right"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -416,7 +416,7 @@ export const AdminDashboard: React.FC = () => {
                 <Calendar size={18} />
               </span>
               <select
-                className="w-full bg-[#12071F]/40 border border-white/10 rounded-2xl py-3.5 pr-12 pl-4 text-sm text-white outline-none focus:border-[#7C3AED]/50 focus:ring-1 focus:ring-[#7C3AED]/20 transition-all text-right appearance-none cursor-pointer"
+                className="w-full bg-[#12071F]/40 border border-white/10 rounded-2xl py-3.5 pr-12 pl-4 text-base text-white outline-none focus:border-[#7C3AED]/50 focus:ring-1 focus:ring-[#7C3AED]/20 transition-all text-right appearance-none cursor-pointer"
                 value={dateFilterType}
                 onChange={(e) => setDateFilterType(e.target.value as any)}
               >
@@ -434,7 +434,7 @@ export const AdminDashboard: React.FC = () => {
             <div className={cn("transition-all duration-300", dateFilterType === 'Custom' ? "opacity-100 scale-100 pointer-events-auto" : "opacity-40 scale-95 pointer-events-none")}>
               <input 
                 type="date"
-                className="w-full bg-[#12071F]/40 border border-white/10 rounded-2xl py-3.5 px-4 text-sm text-white outline-none focus:border-[#7C3AED]/50 focus:ring-1 focus:ring-[#7C3AED]/20 transition-all text-center [color-scheme:dark]"
+                className="w-full bg-[#12071F]/40 border border-white/10 rounded-2xl py-3.5 px-4 text-base text-white outline-none focus:border-[#7C3AED]/50 focus:ring-1 focus:ring-[#7C3AED]/20 transition-all text-center [color-scheme:dark]"
                 value={customFilterDate}
                 onChange={(e) => setCustomFilterDate(e.target.value)}
                 disabled={dateFilterType !== 'Custom'}
@@ -456,7 +456,7 @@ export const AdminDashboard: React.FC = () => {
                     <Check size={48} className="opacity-25" />
                   </div>
                   <p className="text-2xl font-bold tracking-tight">لا توجد طلبات تطابق الفلاتر المحددة</p>
-                  <p className="mt-2 text-sm">جرب تغيير حالة الطلب أو تصفية التاريخ أو مسح حقل البحث</p>
+                  <p className="mt-2 text-base">جرب تغيير حالة الطلب أو تصفية التاريخ أو مسح حقل البحث</p>
                 </motion.div>
               ) : (
                 filteredRequests.map((req, i) => {
@@ -545,7 +545,7 @@ export const AdminDashboard: React.FC = () => {
 
                         {/* Time & Duration Details */}
                         {req.type === 'permission' && (req.fromTime || req.toTime) && (
-                          <div className="flex items-center gap-2 mb-4 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 rounded-xl font-bold w-fit" dir="rtl">
+                          <div className="flex items-center gap-2 mb-4 text-sm text-amber-400 bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 rounded-xl font-bold w-fit" dir="rtl">
                             <span>وقت الإذن:</span>
                             <span className="font-mono">{formatStringTimeTo12Hour(req.fromTime)}</span>
                             <span className="text-white/40">←</span>
@@ -554,7 +554,7 @@ export const AdminDashboard: React.FC = () => {
                         )}
 
                         {req.type !== 'permission' && req.toDate && (
-                          <div className="flex items-center gap-2 mb-4 text-xs text-purple-300 bg-purple-500/10 border border-purple-500/20 px-4 py-2.5 rounded-xl font-bold w-fit" dir="rtl">
+                          <div className="flex items-center gap-2 mb-4 text-sm text-purple-300 bg-purple-500/10 border border-purple-500/20 px-4 py-2.5 rounded-xl font-bold w-fit" dir="rtl">
                             <span>الفترة:</span>
                             <span className="font-mono text-[11px]">{req.fromDate}</span>
                             <span className="text-white/40">إلى</span>
@@ -564,7 +564,7 @@ export const AdminDashboard: React.FC = () => {
                         
                         {/* Request Reason */}
                         <div className="bg-[#12071F]/50 p-4 rounded-2xl border border-white/5 mb-4 relative group-hover:bg-[#12071F]/80 transition-colors">
-                          <p className="text-xs text-[#F5F3FF]/90 italic leading-relaxed">"{req.reason}"</p>
+                          <p className="text-sm text-[#F5F3FF]/90 italic leading-relaxed">"{req.reason}"</p>
                         </div>
 
                         {/* Submission Date */}
@@ -577,7 +577,7 @@ export const AdminDashboard: React.FC = () => {
                         {/* Approved / Rejected Comments display */}
                         {req.status !== 'Pending' && req.adminComment && (
                           <div className={cn(
-                            "p-4 rounded-2xl text-xs border mb-4 text-right",
+                            "p-4 rounded-2xl text-sm border mb-4 text-right",
                             req.status === 'Approved' 
                               ? "bg-emerald-500/5 text-emerald-300 border-emerald-500/10" 
                               : "bg-red-500/5 text-red-300 border-red-500/10"
@@ -594,20 +594,20 @@ export const AdminDashboard: React.FC = () => {
                           <input 
                             type="text"
                             placeholder="ملاحظات أو سبب القبول/الرفض (اختياري)..."
-                            className="w-full bg-[#12071F]/50 border border-white/5 rounded-xl py-2 px-4 text-xs text-white outline-none focus:border-[#C084FC]/40 transition-all text-right placeholder-white/30"
+                            className="w-full bg-[#12071F]/50 border border-white/5 rounded-xl py-2 px-4 text-sm text-white outline-none focus:border-[#C084FC]/40 transition-all text-right placeholder-white/30"
                             value={adminComments[req.id!] || ''}
                             onChange={(e) => setAdminComments({ ...adminComments, [req.id!]: e.target.value })}
                           />
                           <div className="flex gap-3">
                             <button 
                               onClick={() => handleRequest(req.id!, 'Approved')}
-                              className="flex-1 bg-emerald-500/10 hover:bg-emerald-600 text-emerald-400 hover:text-white py-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border border-emerald-500/20 shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                              className="flex-1 bg-emerald-500/10 hover:bg-emerald-600 text-emerald-400 hover:text-white py-3 rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-1.5 border border-emerald-500/20 shadow-xl hover:scale-[1.02] active:scale-[0.98]"
                             >
                               <Check size={16} /> قبول
                             </button>
                             <button 
                               onClick={() => handleRequest(req.id!, 'Rejected')}
-                              className="flex-1 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white py-3 rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-1.5 border border-red-500/20 shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                              className="flex-1 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white py-3 rounded-2xl text-sm font-black transition-all flex items-center justify-center gap-1.5 border border-red-500/20 shadow-xl hover:scale-[1.02] active:scale-[0.98]"
                             >
                               <X size={16} /> رفض
                             </button>
