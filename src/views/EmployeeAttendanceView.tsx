@@ -31,7 +31,14 @@ export const EmployeeAttendanceView: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<'current' | 'last' | 'all'>('current');
 
   useEffect(() => {
-    if (!profile?.roleCode) return;
+    if (!profile?.roleCode) {
+      // No roleCode assigned yet (e.g. new employee pending admin setup).
+      // We never subscribe to anything in this case, so nothing will ever
+      // call setLoading(false) on its own — stop loading explicitly or
+      // this screen spins forever.
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 
