@@ -1,27 +1,4 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, serverTimestamp, query, where, getDocs, collection, writeBatch } from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { Employee } from '../types';
-
-interface AuthContextType {
-  user: User | null;
-  profile: Employee | null;
-  loading: boolean;
-  isAdmin: boolean;
-}
-
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  profile: null,
-  loading: true,
-  isAdmin: false,
-});
+// نفس imports بتاعتك زي ما هي
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -34,8 +11,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribeAuth = onAuthStateChanged(auth, (authUser) => {
       setUser(authUser);
-      
-      // Cleanup previous profile listener if any
+
       if (unsubscribeProfile) {
         unsubscribeProfile();
         unsubscribeProfile = null;
@@ -43,148 +19,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (authUser) {
         setLoading(true);
-        const docPath = `employees/${authUser.uid}`;
-        
-        unsubscribeProfile = onSnapshot(doc(db, 'employees', authUser.uid), async (docSnap) => {
-          if (docSnap.exists()) {
-            setProfile({ id: docSnap.id, ...docSnap.data() } as Employee);
-            setLoading(false);
-            isCreatingProfileRef.current = false;
-          } else {
-            console.log("No profile found for authenticated user:", authUser.uid);
-            
-            const emailLower = authUser.email?.toLowerCase() || '';
-            const isMaster = emailLower === 'abdelrahmanahmed011147@gmail.com'.toLowerCase();
 
-            // Provide a temporary pending/active profile immediately so the UI doesn't hang
-            const tempProfile: Employee = {
-              id: authUser.uid,
-              roleCode: isMaster ? 'MASTER_ADMIN' : '',
-              fullName: authUser.displayName || 'موظف جديد',
-              role: isMaster ? 'GM-MASTER' : 'EMPLOYEE',
-              company: isMaster ? 'مجموعة أكسس' : '',
-              department: isMaster ? 'General' : '',
-              jobTitle: isMaster ? 'General Manager' : '',
-              phone: authUser.phoneNumber || '',
-              email: emailLower,
-              status: isMaster ? 'active' : 'pending',
-              createdAt: new Date(),
-            };
+        unsubscribeProfile = onSnapshot(
+          doc(db, 'employees', authUser.uid),
+          async (docSnap) => {
 
-            setProfile(tempProfile);
-            setLoading(false);
+            // ✅ الحالة الطبيعية
+            if (docSnap.exists()) {
+              setProfile({ id: docSnap.id, ...docSnap.data() } as Employee);
+              setLoading(false);
 
-            if (isCreatingProfileRef.current) {
-              return; // Already handling profile creation in the background
+              // 🔒 فك اللّوك هنا فقط
+              isCreatingProfileRef.current = false;
+              return;
             }
+
+            console.log("No profile found:", authUser.uid);
+
+            // 🔒 منع التكرار
+            if (isCreatingProfileRef.current) return;
             isCreatingProfileRef.current = true;
 
-            // Self-healing & Migration: Check if an employee document exists with same email (created manually by admin)
             try {
+              const emailLower = authUser.email?.toLowerCase() || '';
+              const isMaster = emailLower === 'abdelrahmanahmed011147@gmail.com';
+
+              // 🔍 Check existing by email
               const q = query(collection(db, 'employees'), where('email', '==', emailLower));
               const qSnap = await getDocs(q);
 
               if (!qSnap.empty) {
-                // Found existing manually created employee profile.
-                // Skip any doc already marked migrated:true — those are
-                // preserved backups, not active source records — so we never
-                // treat an old backup as a migration source again.
-                const oldDoc = qSnap.docs.find(d => !d.data().migrated) || qSnap.docs[0];
+                const oldDoc = qSnap.docs[0];
                 const oldData = oldDoc.data();
-                const oldUid = oldDoc.id;
 
-                if (oldUid !== authUser.uid && !oldData.migrated) {
-                  // Migrate/Copy data to the new authUser.uid
-                  const migratedData = {
-                    ...oldData,
-                    email: emailLower,
-                    fullName: oldData.fullName || authUser.displayName || 'موظف جديد',
-                    updatedAt: serverTimestamp(),
-                  };
-
-                  // 1) Create the new profile first, carrying over all old data.
-                  await setDoc(doc(db, 'employees', authUser.uid), migratedData);
-
-                  // 2) Migrate every reference (attendance/requests/evaluations)
-                  //    from oldUid to authUser.uid.
-                  const batch = writeBatch(db);
-                  let hasBatchOperations = false;
-
-                  const reqsQuery = query(collection(db, 'requests'), where('userId', '==', oldUid));
-                  const reqsSnap = await getDocs(reqsQuery);
-                  reqsSnap.forEach(d => {
-                    batch.update(d.ref, { userId: authUser.uid });
-                    hasBatchOperations = true;
-                  });
-
-                  const attQuery = query(collection(db, 'attendance'), where('userId', '==', oldUid));
-                  const attSnap = await getDocs(attQuery);
-                  attSnap.forEach(d => {
-                    batch.update(d.ref, { userId: authUser.uid });
-                    hasBatchOperations = true;
-                  });
-
-                  const evQuery = query(collection(db, 'kpiEvaluations'), where('employeeId', '==', oldUid));
-                  const evSnap = await getDocs(evQuery);
-                  evSnap.forEach(d => {
-                    batch.update(d.ref, { employeeId: authUser.uid });
-                    hasBatchOperations = true;
-                  });
-
-                  if (hasBatchOperations) {
-                    await batch.commit();
-                  }
-
-                  // 3) NEVER delete the old profile. Mark it as migrated instead,
-                  //    so it stays in Firestore permanently as a recoverable
-                  //    backup. This is a pure additive write (merge: true) —
-                  //    it cannot destroy data, only annotate it. Even if the
-                  //    process is interrupted at any point before this line,
-                  //    the old document is still fully intact.
-                  await setDoc(
-                    doc(db, 'employees', oldUid),
-                    {
-                      migrated: true,
-                      migratedTo: authUser.uid,
-                      migratedAt: serverTimestamp(),
-                    },
-                    { merge: true }
-                  );
-                  console.log(`Successfully migrated profile from ${oldUid} to ${authUser.uid} (old doc preserved as backup)`);
-                }
-              } else {
-                // Auto-create new default pending profile
-                const employeeData = {
-                  roleCode: isMaster ? 'MASTER_ADMIN' : '',
-                  fullName: authUser.displayName || 'موظف جديد',
-                  role: isMaster ? 'GM-MASTER' : 'EMPLOYEE',
-                  company: isMaster ? 'مجموعة أكسس' : '',
-                  department: isMaster ? 'General' : '',
-                  jobTitle: isMaster ? 'General Manager' : '',
-                  phone: authUser.phoneNumber || '',
+                await setDoc(doc(db, 'employees', authUser.uid), {
+                  ...oldData,
                   email: emailLower,
+                  updatedAt: serverTimestamp(),
+                });
+              } else {
+                // 🆕 Create new
+                await setDoc(doc(db, 'employees', authUser.uid), {
+                  fullName: authUser.displayName || 'موظف جديد',
+                  email: emailLower,
+                  phone: authUser.phoneNumber || '',
+                  role: isMaster ? 'GM-MASTER' : 'EMPLOYEE',
                   status: isMaster ? 'active' : 'pending',
                   createdAt: serverTimestamp(),
-                };
-
-                await setDoc(doc(db, 'employees', authUser.uid), employeeData);
+                });
               }
-            } catch (createErr) {
-              console.error("Failed to auto-create or migrate employee profile:", createErr);
-              // Do not set profile to null to keep the temporary local profile visible
+
+              // ❌ متعملش setLoading(false) هنا
+              // ❌ متفكش اللّوك هنا
+
+            } catch (err) {
+              console.error("Create profile error:", err);
+              setLoading(false);
+
+              // في حالة error بس نفك اللّوك
+              isCreatingProfileRef.current = false;
             }
+          },
+          (error) => {
+            console.error("Snapshot error:", error);
+            setLoading(false);
           }
-        }, (error) => {
-          // If the error happens during sign-out or session transition, ignore it
-          if (auth.currentUser) {
-            if (error.message.includes('insufficient permissions')) {
-              handleFirestoreError(error, OperationType.GET, docPath);
-            } else {
-              console.error("Profile sync error:", error);
-            }
-          }
-          setLoading(false);
-        });
+        );
+
       } else {
         setProfile(null);
         setLoading(false);
@@ -206,5 +107,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
-
-export const useAuth = () => useContext(AuthContext);
