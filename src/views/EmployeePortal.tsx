@@ -30,25 +30,11 @@ export const EmployeePortal: React.FC = () => {
 
   useEffect(() => {
     const checkIfMobile = () => {
-      // 1. Standard mobile/tablet UA check
-      const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi|Tablet/i.test(navigator.userAgent);
-      
-      // 2. iOS "Request Desktop Site" bypass (presents as Macintosh but has touch points)
-      const isIOSBypass = (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1);
-      
-      // 3. Android "Request Desktop Site" bypass
-      const isAndroidBypass = (navigator.userAgent.includes("Linux") && navigator.maxTouchPoints > 1 && !/Ubuntu|Debian|Fedora|RedHat|ChromeOS/i.test(navigator.userAgent));
-      
-      // 4. Screen-based heuristics (phones in landscape might have window.innerWidth > 768 but window.innerHeight is very small, e.g., < 500px)
-      const isMobileLandscape = (window.innerWidth <= 1024 && window.innerHeight <= 500);
-      const isSmallScreen = window.innerWidth <= 768;
-      
-      setIsMobile(mobileUA || isIOSBypass || isAndroidBypass || isMobileLandscape || isSmallScreen);
+      // Use matchMedia for a more reliable, CSS-based check for touch-primary devices.
+      setIsMobile(window.matchMedia('(pointer: coarse)').matches);
     };
 
     checkIfMobile();
-    window.addEventListener('resize', checkIfMobile);
-    return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
   const formatLiveClock = (date: Date) => {
@@ -992,4 +978,3 @@ export const EmployeePortal: React.FC = () => {
     </div>
   );
 };
-

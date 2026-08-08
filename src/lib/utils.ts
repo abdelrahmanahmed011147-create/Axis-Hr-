@@ -37,11 +37,10 @@ export function getCairoOffset(date: Date): number {
   }
 }
 
-export function getCairoNow() {
-  const now = new Date();
-  const offset = getCairoOffset(now);
-  const localOffset = now.getTimezoneOffset();
-  return new Date(now.getTime() + (offset + localOffset) * 60000);
+export function getCairoNow(): Date {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" })
+  );
 }
 
 export function formatCairoDate(date: Date, pattern: string = 'yyyy-MM-dd') {
