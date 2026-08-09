@@ -31,14 +31,23 @@ export const EmployeeAttendanceView: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<'current' | 'last' | 'all'>('current');
 
   useEffect(() => {
-    if (!profile?.roleCode) return;
+    if (!profile?.id) {
+      // No profile loaded yet. We never subscribe to anything in this case,
+      // so nothing will ever call setLoading(false) on its own — stop
+      // loading explicitly or this screen spins forever.
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 
-    // Fetch attendance for current employee
+    // Fetch attendance for current employee.
+    // Query by userId (stable Firebase Auth UID) rather than roleCode — a
+    // human-editable business field is not a reliable join key and can
+    // drift out of sync with historical records over time.
     const attQuery = query(
       collection(db, 'attendance'),
-      where('roleCode', '==', profile.roleCode)
+      where('userId', '==', profile.id)
     );
 
     const unsubAttendance = onSnapshot(attQuery, (snap) => {
@@ -56,7 +65,7 @@ export const EmployeeAttendanceView: React.FC = () => {
     // Fetch requests for current employee to sync stats (approved leaves, vacations)
     const reqQuery = query(
       collection(db, 'requests'),
-      where('roleCode', '==', profile.roleCode)
+      where('userId', '==', profile.id)
     );
 
     const unsubRequests = onSnapshot(reqQuery, (snap) => {
@@ -79,7 +88,7 @@ export const EmployeeAttendanceView: React.FC = () => {
       unsubRequests();
       unsubSettings();
     };
-  }, [profile?.roleCode]);
+  }, [profile?.id]);
 
   // Determine date ranges for client side filters
   const getFilteredLogs = () => {

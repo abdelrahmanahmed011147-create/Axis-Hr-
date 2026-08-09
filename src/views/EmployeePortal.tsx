@@ -631,7 +631,7 @@ export const EmployeePortal: React.FC = () => {
                     </span>
                     <span className="text-[9px] opacity-40 font-bold block my-0.5">إلى</span>
                     <span className="text-[10px] font-bold font-mono tracking-tight opacity-80 block">
-                      {formatStringTimeTo12Hour(settings?.eveningEndTime || "21:00")}
+                      {formatStringTimeTo12Hour(settings?.eveningEndTime || "20:00")}
                     </span>
                   </button>
 

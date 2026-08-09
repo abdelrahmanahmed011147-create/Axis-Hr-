@@ -26,7 +26,7 @@ export const SettingsView: React.FC = () => {
           if (!data.morningStartTime) data.morningStartTime = "09:00";
           if (!data.morningEndTime) data.morningEndTime = "17:00";
           if (!data.eveningStartTime) data.eveningStartTime = "12:00";
-          if (!data.eveningEndTime) data.eveningEndTime = "21:00";
+          if (!data.eveningEndTime) data.eveningEndTime = "20:00";
           if (!(data as any).evening2StartTime) (data as any).evening2StartTime = "13:00";
           if (!(data as any).evening2EndTime) (data as any).evening2EndTime = "21:00";
           setSettings(data);
@@ -286,7 +286,7 @@ export const SettingsView: React.FC = () => {
                       <label className="block text-[11px] text-[#A78BFA] mb-1.5 font-bold">وقت انتهاء العمل</label>
                       <input 
                         type="time"
-                        value={settings.eveningEndTime || "21:00"}
+                        value={settings.eveningEndTime || "20:00"}
                         onChange={(e) => setSettings({ ...settings, eveningEndTime: e.target.value })}
                         className="w-full bg-[#12071F] border border-white/10 rounded-xl py-2 px-3 text-white text-sm font-mono outline-none focus:border-[#E2B765] transition-all"
                       />
