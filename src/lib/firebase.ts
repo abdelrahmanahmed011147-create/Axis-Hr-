@@ -10,13 +10,15 @@ export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestore
   : getFirestore(app);
 export const auth = getAuth(app);
 
-// Explicitly force local (IndexedDB-backed) persistence. This survives page
-// refreshes, browser crashes, and power/network interruptions — the session
-// is restored automatically from disk once the app reloads and reconnects,
-// instead of depending on an implicit SDK default.
-setPersistence(auth, browserLocalPersistence).catch((err) => {
-  console.error('Failed to set auth persistence:', err);
-});
+export const initializeAuthPersistence = async () => {
+  try {
+    // Explicitly force local (IndexedDB-backed) persistence and WAIT for it to complete.
+    // This is the critical fix. It ensures that the session survives browser/system restarts.
+    await setPersistence(auth, browserLocalPersistence);
+  } catch (err) {
+    console.error('Failed to set auth persistence:', err);
+  }
+};
 
 export const getGoogleProvider = () => {
   try {
@@ -60,6 +62,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     },
     operationType,
     path
+    
   }
   const errorMessage = JSON.stringify(errInfo);
   console.error('Firestore Error: ', errorMessage);

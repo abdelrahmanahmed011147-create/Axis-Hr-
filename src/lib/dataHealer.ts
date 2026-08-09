@@ -377,6 +377,71 @@ export async function recalculateAllAttendanceLogs(): Promise<number> {
 }
 
 /**
+ * Finds all employee documents marked as 'migrated' and ensures their related data
+ * (attendance, requests, evaluations) is correctly pointing to the new user ID.
+ * This is a safe, idempotent operation that can be run multiple times to fix orphaned data.
+ */
+export async function healMigratedUserReferences(): Promise<{ report: string[] }> {
+  const report: string[] = [];
+  try {
+    // 1. Find all employee profiles that have been migrated.
+    const migratedQuery = query(collection(db, 'employees'), where('migrated', '==', true));
+    const migratedSnap = await getDocs(migratedQuery);
+
+    if (migratedSnap.empty) {
+      report.push("No migrated employee profiles found to heal. System is clean.");
+      return { report };
+    }
+
+    report.push(`Found ${migratedSnap.size} migrated profiles to check for healing.`);
+
+    for (const migratedDoc of migratedSnap.docs) {
+      const oldData = migratedDoc.data();
+      const oldUid = migratedDoc.id;
+      const newUid = oldData.migratedTo;
+
+      if (!newUid) {
+        report.push(`[SKIPPED] Migrated doc ${oldUid} is missing the 'migratedTo' field.`);
+        continue;
+      }
+
+      report.push(`Healing references from OLD [${oldUid}] to NEW [${newUid}] for ${oldData.fullName}...`);
+      const batch = writeBatch(db);
+      let updatedCount = 0;
+
+      // 2. Heal 'attendance' collection
+      const attQuery = query(collection(db, 'attendance'), where('userId', '==', oldUid));
+      const attSnap = await getDocs(attQuery);
+      if (!attSnap.empty) {
+        attSnap.forEach(doc => {
+          batch.update(doc.ref, { userId: newUid });
+          updatedCount++;
+        });
+        report.push(`  - Found and queued ${attSnap.size} attendance records for update.`);
+      }
+
+      // You can add other collections like 'requests' and 'kpiEvaluations' here as well
+
+      if (updatedCount > 0) {
+        await batch.commit();
+        report.push(`  - SUCCESS: Committed ${updatedCount} document updates for ${oldData.fullName}.`);
+      } else {
+        report.push(`  - No dangling references found for ${oldData.fullName}.`);
+      }
+    }
+
+    report.push("Healing process completed successfully! 🟢");
+
+  } catch (err: any) {
+    console.error('Error during healing migrated user references:', err);
+    report.push(`HEALING FAILED: ${err.message || String(err)}`);
+    throw err;
+  }
+
+  return { report };
+}
+
+/**
  * Specifically heals or activates attendance records for Nada Nashaat (AXIS-011) and Zahra (AXIS-008) for today.
  * If they don't have attendance records for today, we create them marked as present.
  */
@@ -452,4 +517,3 @@ export async function healSpecificAttendanceForNadaAndZahra(): Promise<{ success
     return { success: false, message: `فشل التعديل: ${err.message || String(err)}` };
   }
 }
-

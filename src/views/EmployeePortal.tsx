@@ -10,6 +10,26 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Attendance, LeaveRequest } from '../types';
 import { INSPIRATIONS } from '../data/inspirations';
 
+// Hoisted helper function to prevent initialization errors.
+// This function is pure and does not depend on component state.
+const getQueryDate = (time: Date) => {
+  let qDate = formatCairoDate(time);
+  // If it is exactly midnight (00:00:00 - 00:00:59) in Cairo, we use yesterday's date
+  // to fetch the attendance record so they can still register checkout!
+  const offset = getCairoOffset(time);
+  const localOffset = time.getTimezoneOffset();
+  const cairoDate = new Date(time.getTime() + (offset + localOffset) * 60000);
+  const cairoHour = cairoDate.getHours();
+  const cairoMin = cairoDate.getMinutes();
+
+  if (cairoHour === 0 && cairoMin === 0) {
+    const yesterday = new Date(time);
+    yesterday.setDate(yesterday.getDate() - 1);
+    qDate = formatCairoDate(yesterday);
+  }
+  return qDate;
+};
+
 export const EmployeePortal: React.FC = () => {
   const { profile } = useAuth();
   const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
@@ -21,6 +41,21 @@ export const EmployeePortal: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isMobile, setIsMobile] = useState(false);
 
+  // Stable state for the query date. This will only change at midnight.
+  const [queryDate, setQueryDate] = useState(() => getQueryDate(new Date()));
+
+  // This effect is ONLY for updating the date at midnight.
+  // It does not trigger the main data fetch on every tick.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newQueryDate = getQueryDate(new Date());
+      if (newQueryDate !== queryDate) {
+        setQueryDate(newQueryDate);
+      }
+    }, 30000); // Check every 30 seconds for date change
+    return () => clearInterval(interval);
+  }, [queryDate]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -30,25 +65,11 @@ export const EmployeePortal: React.FC = () => {
 
   useEffect(() => {
     const checkIfMobile = () => {
-      // 1. Standard mobile/tablet UA check
-      const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi|Tablet/i.test(navigator.userAgent);
-      
-      // 2. iOS "Request Desktop Site" bypass (presents as Macintosh but has touch points)
-      const isIOSBypass = (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1);
-      
-      // 3. Android "Request Desktop Site" bypass
-      const isAndroidBypass = (navigator.userAgent.includes("Linux") && navigator.maxTouchPoints > 1 && !/Ubuntu|Debian|Fedora|RedHat|ChromeOS/i.test(navigator.userAgent));
-      
-      // 4. Screen-based heuristics (phones in landscape might have window.innerWidth > 768 but window.innerHeight is very small, e.g., < 500px)
-      const isMobileLandscape = (window.innerWidth <= 1024 && window.innerHeight <= 500);
-      const isSmallScreen = window.innerWidth <= 768;
-      
-      setIsMobile(mobileUA || isIOSBypass || isAndroidBypass || isMobileLandscape || isSmallScreen);
+      // Use matchMedia for a more reliable, CSS-based check for touch-primary devices.
+      setIsMobile(window.matchMedia('(pointer: coarse)').matches);
     };
 
     checkIfMobile();
-    window.addEventListener('resize', checkIfMobile);
-    return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
   const formatLiveClock = (date: Date) => {
@@ -80,56 +101,20 @@ export const EmployeePortal: React.FC = () => {
     };
   };
   
-  // Request Modal State
-  const [showRequestModal, setShowRequestModal] = useState(false);
-  const [selectedRequest, setSelectedRequest] = useState<{label: string, icon: any, type: string, color: string} | null>(null);
-  const [dateType, setDateType] = useState<'today' | 'tomorrow' | 'custom'>('today');
-  const [requestForm, setRequestForm] = useState({
-    date: formatCairoDate(new Date()),
-    reason: '',
-    fromTime: '09:00',
-    toTime: '11:00',
-    fromDate: formatCairoDate(new Date()),
-    toDate: formatCairoDate(new Date()),
-  });
-
-  useEffect(() => {
-    if (dateType === 'today') {
-      const d = formatCairoDate(new Date());
-      setRequestForm(prev => ({ ...prev, date: d, fromDate: d }));
-    } else if (dateType === 'tomorrow') {
-      const tom = new Date();
-      tom.setDate(tom.getDate() + 1);
-      const d = formatCairoDate(tom);
-      setRequestForm(prev => ({ ...prev, date: d, fromDate: d }));
-    }
-  }, [dateType]);
-
   const [approvedPermission, setApprovedPermission] = useState<any>(null);
 
-  // Derive queryDate dynamically based on currentTime
-  const getQueryDate = (time: Date) => {
-    let qDate = formatCairoDate(time);
-    // If it is exactly midnight (00:00:00 - 00:00:59) in Cairo, we use yesterday's date
-    // to fetch the attendance record so they can still register checkout!
-    const offset = getCairoOffset(time);
-    const localOffset = time.getTimezoneOffset();
-    const cairoDate = new Date(time.getTime() + (offset + localOffset) * 60000);
-    const cairoHour = cairoDate.getHours();
-    const cairoMin = cairoDate.getMinutes();
-
-    if (cairoHour === 0 && cairoMin === 0) {
-      const yesterday = new Date(time);
-      yesterday.setDate(yesterday.getDate() - 1);
-      qDate = formatCairoDate(yesterday);
-    }
-    return qDate;
-  };
-
-  const queryDate = getQueryDate(currentTime);
-
   useEffect(() => {
-    setAttendanceLoaded(false);
+    // Guard at the top: If there is no profile, we cannot fetch data.
+    // Ensure we are not in a loading state and clean up any previous listeners.
+    if (!profile?.id) {
+      setAttendanceLoaded(true); // Nothing to load, so we are "loaded".
+      setTodayAttendance(null);
+      setApprovedPermission(null);
+      return;
+    }
+
+    // Profile exists, so we begin the fetching process.
+    setAttendanceLoaded(false); 
 
     // Sync settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'system_config'), (docSnap) => {
@@ -137,8 +122,6 @@ export const EmployeePortal: React.FC = () => {
     }, (error) => {
       console.error("Settings fetch error:", error);
     });
-
-    if (!profile?.id) return;
 
     // Check queryDate attendance
     const q = query(
@@ -196,6 +179,31 @@ export const EmployeePortal: React.FC = () => {
       unsubPermission();
     };
   }, [profile?.id, queryDate]);
+  
+  // Request Modal State
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<{label: string, icon: any, type: string, color: string} | null>(null);
+  const [dateType, setDateType] = useState<'today' | 'tomorrow' | 'custom'>('today');
+  const [requestForm, setRequestForm] = useState({
+    date: formatCairoDate(new Date()),
+    reason: '',
+    fromTime: '09:00',
+    toTime: '11:00',
+    fromDate: formatCairoDate(new Date()),
+    toDate: formatCairoDate(new Date()),
+  });
+
+  useEffect(() => {
+    if (dateType === 'today') {
+      const d = formatCairoDate(new Date());
+      setRequestForm(prev => ({ ...prev, date: d, fromDate: d }));
+    } else if (dateType === 'tomorrow') {
+      const tom = new Date();
+      tom.setDate(tom.getDate() + 1);
+      const d = formatCairoDate(tom);
+      setRequestForm(prev => ({ ...prev, date: d, fromDate: d }));
+    }
+  }, [dateType]);
 
   const handleCheckIn = async () => {
     if (!profile) return;
@@ -992,4 +1000,3 @@ export const EmployeePortal: React.FC = () => {
     </div>
   );
 };
-

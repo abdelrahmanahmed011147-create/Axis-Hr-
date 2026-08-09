@@ -294,7 +294,15 @@ export const EvaluationsView: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [kpiConfigs, setKpiConfigs] = useState<DepartmentKPINext[]>([]);
   const [kpiEvaluations, setKpiEvaluations] = useState<EmployeeEvaluation[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Separate loading states for each primary data source
+  const [employeesLoading, setEmployeesLoading] = useState(true);
+  const [configsLoading, setConfigsLoading] = useState(true);
+  const [evaluationsLoading, setEvaluationsLoading] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  
+  // The overall loading state is true only if ANY of the sources are still loading.
+  const loading = employeesLoading || configsLoading || evaluationsLoading || settingsLoading;
 
   // Set default formDept and deptFilter for department leaders
   useEffect(() => {
@@ -414,26 +422,43 @@ export const EvaluationsView: React.FC = () => {
     } catch (_) {}
   };
 
+  // Effect 1: Fetch employees
   useEffect(() => {
-    // 1. Fetch employees
+    setEmployeesLoading(true);
     const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
       const list: Employee[] = [];
       snap.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() } as Employee);
       });
       setEmployees(list.filter(e => e.status !== 'deleted'));
+      setEmployeesLoading(false);
+    }, (error) => {
+      console.error("Error fetching employees:", error);
+      setEmployeesLoading(false);
     });
+    return () => unsubEmployees();
+  }, []);
 
-    // 2. Fetch customized KPI settings per department
+  // Effect 2: Fetch customized KPI settings per department
+  useEffect(() => {
+    setConfigsLoading(true);
     const unsubConfigs = onSnapshot(collection(db, 'kpiConfigs'), (snap) => {
       const list: DepartmentKPINext[] = [];
       snap.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() } as DepartmentKPINext);
       });
       setKpiConfigs(list);
+      setConfigsLoading(false);
+    }, (error) => {
+      console.error("Error fetching KPI configs:", error);
+      setConfigsLoading(false);
     });
+    return () => unsubConfigs();
+  }, []);
 
-    // 3. Fetch past evaluations
+  // Effect 3: Fetch past evaluations
+  useEffect(() => {
+    setEvaluationsLoading(true);
     const unsubEvaluations = onSnapshot(
       query(collection(db, 'kpiEvaluations'), orderBy('createdAt', 'desc')), 
       (snap) => {
@@ -442,23 +467,27 @@ export const EvaluationsView: React.FC = () => {
           list.push({ id: doc.id, ...doc.data() } as EmployeeEvaluation);
         });
         setKpiEvaluations(list);
-        setLoading(false);
-      }
-    );
+        setEvaluationsLoading(false);
+      }, (error) => {
+        console.error("Error fetching evaluations:", error);
+        setEvaluationsLoading(false);
+      });
+    return () => unsubEvaluations();
+  }, []);
 
-    // 4. Fetch system settings
+  // Effect 4: Fetch system settings
+  useEffect(() => {
+    setSettingsLoading(true);
     const unsubSettings = onSnapshot(doc(db, 'settings', 'system_config'), (snap) => {
       if (snap.exists()) {
         setSystemSettings(snap.data() as SettingsType);
       }
+      setSettingsLoading(false);
+    }, (error) => {
+      console.error("Error fetching system settings:", error);
+      setSettingsLoading(false);
     });
-
-    return () => {
-      unsubEmployees();
-      unsubConfigs();
-      unsubEvaluations();
-      unsubSettings();
-    };
+    return () => unsubSettings();
   }, []);
 
   // Sync Form criteria when Department changes
@@ -493,6 +522,13 @@ export const EvaluationsView: React.FC = () => {
     return sumWeight > 0 ? Math.round((weightedPoints / sumWeight) * 100) : 0;
   }, [formScores, activeKpiSubset]);
 
+  // Debugging log to trace loading states
+  console.log({
+    employeesLoading,
+    configsLoading,
+    evaluationsLoading,
+    settingsLoading,
+  });
   // Save/Edit KPI standards per department
   const startEditingKpis = (deptName: string) => {
     setEditingDept(deptName);

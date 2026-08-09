@@ -25,25 +25,41 @@ export const MyEvaluationsView: React.FC = () => {
   const { profile } = useAuth();
   const [evaluations, setEvaluations] = useState<EmployeeEvaluation[]>([]);
   const [kpiConfigs, setKpiConfigs] = useState<DepartmentKPINext[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Separate loading states for each data source
+  const [evalsLoading, setEvalsLoading] = useState(true);
+  const [kpiConfigsLoading, setKpiConfigsLoading] = useState(true);
+  // Overall loading state is derived from the individual flags
+  const loading = evalsLoading || kpiConfigsLoading;
   const [expandedEvalId, setExpandedEvalId] = useState<string | null>(null);
 
   // Load KPI configs to display max weight limits for criteria accurately
+  // This can run independently of the user profile.
   useEffect(() => {
+    setKpiConfigsLoading(true);
     const unsubConfigs = onSnapshot(collection(db, 'kpiConfigs'), (snap) => {
       const list: DepartmentKPINext[] = [];
       snap.forEach((doc) => {
         list.push({ id: doc.id, ...doc.data() } as DepartmentKPINext);
       });
       setKpiConfigs(list);
+      setKpiConfigsLoading(false);
+    }, (error) => {
+      console.error("Error fetching KPI configs:", error);
+      setKpiConfigsLoading(false);
     });
     return () => unsubConfigs();
   }, []);
 
   // Fetch Evaluations for this logged-in employee
   useEffect(() => {
-    if (!profile?.id) return;
+    // Guard: If there's no profile, we can't fetch evaluations.
+    // Set loading to false and exit.
+    if (!profile?.id) {
+      setEvalsLoading(false);
+      return;
+    }
 
+    setEvalsLoading(true); // Start loading evaluations
     const q = query(
       collection(db, 'kpiEvaluations'),
       where('employeeId', '==', profile.id)
@@ -67,14 +83,17 @@ export const MyEvaluationsView: React.FC = () => {
       if (list.length > 0 && !expandedEvalId) {
         setExpandedEvalId(list[0].id || null);
       }
-      setLoading(false);
+      setEvalsLoading(false);
     }, (error) => {
       console.error("Error fetching employee evaluations:", error);
-      setLoading(false);
+      setEvalsLoading(false);
     });
 
     return () => unsubEvals();
   }, [profile?.id]);
+
+  // Debugging log to trace loading states
+  console.log({ evalsLoading, kpiConfigsLoading });
 
   // Find KPI config for the employee's department
   const userKpiConfig = useMemo(() => {
