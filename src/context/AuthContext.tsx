@@ -5,7 +5,17 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, serverTimestamp, query, where, getDocs, collection, writeBatch } from 'firebase/firestore';
+import {
+  doc,
+  onSnapshot,
+  serverTimestamp,
+  query,
+  where,
+  getDocsFromServer,
+  collection,
+  writeBatch,
+  runTransaction,
+} from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Employee } from '../types';
 
@@ -24,14 +34,19 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 // Safety watchdog: loading must never stay true longer than this, no matter
-// what path (or non-path) the auth/profile resolution logic takes.
-const LOADING_TIMEOUT_MS = 5000;
+// what path (or non-path) the auth/profile resolution logic takes. Raised
+// from 5s to give a genuine server round-trip (used to disambiguate a cache
+// miss from a real "no profile") room to complete on a slow reconnect.
+const LOADING_TIMEOUT_MS = 8000;
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
-  const isCreatingProfileRef = useRef(false);
+  // Guards against resolving the same uid's "missing profile" case twice at
+  // once (e.g. the onSnapshot listener firing again while a previous
+  // resolution attempt is still in flight).
+  const resolvingUidRef = useRef<string | null>(null);
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -59,127 +74,143 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     };
 
-    // Heavy self-healing/migration logic lives here so the onSnapshot
-    // callback itself stays lightweight and non-blocking. Business logic
-    // is unchanged from before — only extracted and given direct
-    // setProfile/stopLoading calls so it no longer depends on the
-    // onSnapshot listener re-firing to resolve the loading state.
+    /**
+     * Runs ONLY when the profile listener has delivered a SERVER-CONFIRMED
+     * "document does not exist" result (docSnap.metadata.fromCache === false).
+     * A cache-sourced "doesn't exist" is never enough to get here — see the
+     * onSnapshot callback below. This is the single place in the app allowed
+     * to create a brand-new employee document, and every write in it is
+     * additionally guarded by a Firestore transaction, whose read is always
+     * served fresh from the server (transactions never read from the local
+     * cache). That means:
+     *
+     *  - a document that was created moments ago by another tab, another
+     *    device, or a previous run of this same function is never clobbered
+     *    (covers concurrent-tab logins, and prevents this function from
+     *    racing itself).
+     *  - a document that genuinely exists on the server can never be
+     *    overwritten with a fresh "pending" default — which was the actual
+     *    mechanism behind "active -> pending".
+     */
     const resolveMissingProfile = async (authUser: User) => {
+      if (resolvingUidRef.current === authUser.uid) return; // already in flight
+      resolvingUidRef.current = authUser.uid;
+
       const emailLower = authUser.email?.toLowerCase() || '';
       const isMaster = emailLower === 'abdelrahmanahmed011147@gmail.com'.toLowerCase();
 
-      // Self-healing & Migration: Check if an employee document exists with same email (created manually by admin)
       try {
-        const q = query(collection(db, 'employees'), where('email', '==', emailLower));
-        const qSnap = await getDocs(q);
+        // Self-healing & migration: check whether an employee document
+        // already exists under a DIFFERENT (old/legacy) uid with the same
+        // email — e.g. one created manually by HR before this Firebase Auth
+        // uid existed. This lookup MUST hit the server, not the cache: a
+        // stale/empty cache here must never be read as "no legacy record".
+        let legacyDoc: { id: string; data: any } | null = null;
+        try {
+          const q = query(collection(db, 'employees'), where('email', '==', emailLower));
+          const qSnap = await getDocsFromServer(q);
+          if (!qSnap.empty) {
+            const found = qSnap.docs.find(d => !d.data().migrated) || qSnap.docs[0];
+            legacyDoc = { id: found.id, data: found.data() };
+          }
+        } catch (lookupErr) {
+          // Offline or server unreachable — we cannot safely determine
+          // whether a legacy record exists. Do NOT fall through to creating
+          // a brand-new "pending" profile in this case. Bail out; the next
+          // auth/profile event (once connectivity returns) will retry.
+          console.warn('[Auth] legacy-profile lookup failed, deferring resolution:', lookupErr);
+          return;
+        }
 
-        if (!qSnap.empty) {
-          // Found existing manually created employee profile.
-          // Skip any doc already marked migrated:true — those are
-          // preserved backups, not active source records — so we never
-          // treat an old backup as a migration source again.
-          const oldDoc = qSnap.docs.find(d => !d.data().migrated) || qSnap.docs[0];
-          const oldData = oldDoc.data();
-          const oldUid = oldDoc.id;
+        let didCreate = false;
+        let didMigrate = false;
+        const oldUid = legacyDoc?.id;
 
-          if (oldUid !== authUser.uid && !oldData.migrated) {
-            // Migrate/Copy data to the new authUser.uid
+        await runTransaction(db, async (tx) => {
+          const newRef = doc(db, 'employees', authUser.uid);
+          // Authoritative existence check — transaction reads always go to
+          // the server. If a doc now exists here (created since our
+          // onSnapshot fired), back off and change nothing.
+          const freshSnap = await tx.get(newRef);
+          if (freshSnap.exists()) {
+            return;
+          }
+
+          if (legacyDoc && legacyDoc.id !== authUser.uid && !legacyDoc.data.migrated) {
             const migratedData = {
-              ...oldData,
+              ...legacyDoc.data,
               email: emailLower,
-              fullName: oldData.fullName || authUser.displayName || 'موظف جديد',
+              fullName: legacyDoc.data.fullName || authUser.displayName || 'موظف جديد',
               updatedAt: serverTimestamp(),
             };
+            // 1) Create the new profile, carrying over all old data.
+            tx.set(newRef, migratedData);
+            // 2) NEVER delete the old profile. Mark it as migrated instead,
+            //    so it stays in Firestore permanently as a recoverable
+            //    backup. Pure additive write (merge: true) — cannot destroy
+            //    data, only annotate it.
+            tx.set(
+              doc(db, 'employees', legacyDoc.id),
+              { migrated: true, migratedTo: authUser.uid, migratedAt: serverTimestamp() },
+              { merge: true }
+            );
+            didMigrate = true;
+          } else {
+            const employeeData = {
+              roleCode: isMaster ? 'MASTER_ADMIN' : '',
+              fullName: authUser.displayName || 'موظف جديد',
+              role: isMaster ? 'GM-MASTER' : 'EMPLOYEE',
+              company: isMaster ? 'مجموعة أكسس' : '',
+              department: isMaster ? 'General' : '',
+              jobTitle: isMaster ? 'General Manager' : '',
+              phone: authUser.phoneNumber || '',
+              email: emailLower,
+              status: isMaster ? 'active' : 'pending',
+              createdAt: serverTimestamp(),
+            };
+            tx.set(newRef, employeeData);
+            didCreate = true;
+          }
+        });
 
-            // 1) Create the new profile first, carrying over all old data.
-            await setDoc(doc(db, 'employees', authUser.uid), migratedData);
-
-            // 2) Migrate every reference (attendance/requests/evaluations)
-            //    from oldUid to authUser.uid.
+        if (didMigrate && oldUid) {
+          console.log(`[Auth] Successfully migrated profile from ${oldUid} to ${authUser.uid} (old doc preserved as backup)`);
+          // Migrate cross-references (requests/attendance/evaluations) from
+          // the legacy uid to the new uid. Best-effort follow-up — it never
+          // touches the employee document itself, so even if it fails
+          // partway through, the profile committed above is unaffected.
+          try {
             const batch = writeBatch(db);
             let hasBatchOperations = false;
 
-            const reqsQuery = query(collection(db, 'requests'), where('userId', '==', oldUid));
-            const reqsSnap = await getDocs(reqsQuery);
-            reqsSnap.forEach(d => {
-              batch.update(d.ref, { userId: authUser.uid });
-              hasBatchOperations = true;
-            });
+            const reqsSnap = await getDocsFromServer(query(collection(db, 'requests'), where('userId', '==', oldUid)));
+            reqsSnap.forEach(d => { batch.update(d.ref, { userId: authUser.uid }); hasBatchOperations = true; });
 
-            const attQuery = query(collection(db, 'attendance'), where('userId', '==', oldUid));
-            const attSnap = await getDocs(attQuery);
-            attSnap.forEach(d => {
-              batch.update(d.ref, { userId: authUser.uid });
-              hasBatchOperations = true;
-            });
+            const attSnap = await getDocsFromServer(query(collection(db, 'attendance'), where('userId', '==', oldUid)));
+            attSnap.forEach(d => { batch.update(d.ref, { userId: authUser.uid }); hasBatchOperations = true; });
 
-            const evQuery = query(collection(db, 'kpiEvaluations'), where('employeeId', '==', oldUid));
-            const evSnap = await getDocs(evQuery);
-            evSnap.forEach(d => {
-              batch.update(d.ref, { employeeId: authUser.uid });
-              hasBatchOperations = true;
-            });
+            const evSnap = await getDocsFromServer(query(collection(db, 'kpiEvaluations'), where('employeeId', '==', oldUid)));
+            evSnap.forEach(d => { batch.update(d.ref, { employeeId: authUser.uid }); hasBatchOperations = true; });
 
-            if (hasBatchOperations) {
-              await batch.commit();
-            }
-
-            // 3) NEVER delete the old profile. Mark it as migrated instead,
-            //    so it stays in Firestore permanently as a recoverable
-            //    backup. This is a pure additive write (merge: true) —
-            //    it cannot destroy data, only annotate it. Even if the
-            //    process is interrupted at any point before this line,
-            //    the old document is still fully intact.
-            await setDoc(
-              doc(db, 'employees', oldUid),
-              {
-                migrated: true,
-                migratedTo: authUser.uid,
-                migratedAt: serverTimestamp(),
-              },
-              { merge: true }
-            );
-            console.log(`[Auth] Successfully migrated profile from ${oldUid} to ${authUser.uid} (old doc preserved as backup)`);
-
-            // Resolve immediately from what we just wrote rather than waiting
-            // on the onSnapshot listener to re-fire with the server copy.
-            setProfile({ id: authUser.uid, ...migratedData } as Employee);
-            stopLoading('migration complete');
-          } else {
-            // No migration performed (already migrated, or oldUid === authUser.uid).
-            // No write happens here, so the profile onSnapshot listener will never
-            // re-fire on its own — stop loading explicitly or the UI hangs forever.
-            stopLoading('migration skipped (already migrated / same uid)');
+            if (hasBatchOperations) await batch.commit();
+          } catch (refErr) {
+            console.warn('[Auth] cross-reference migration follow-up failed (non-fatal):', refErr);
           }
+        } else if (didCreate) {
+          console.log('[Auth] created new pending profile for', authUser.uid);
         } else {
-          // Auto-create new default pending profile
-          const employeeData = {
-            roleCode: isMaster ? 'MASTER_ADMIN' : '',
-            fullName: authUser.displayName || 'موظف جديد',
-            role: isMaster ? 'GM-MASTER' : 'EMPLOYEE',
-            company: isMaster ? 'مجموعة أكسس' : '',
-            department: isMaster ? 'General' : '',
-            jobTitle: isMaster ? 'General Manager' : '',
-            phone: authUser.phoneNumber || '',
-            email: emailLower,
-            status: isMaster ? 'active' : 'pending',
-            createdAt: serverTimestamp(),
-          };
-
-          await setDoc(doc(db, 'employees', authUser.uid), employeeData);
-
-          // Resolve immediately from what we just wrote rather than waiting
-          // on the onSnapshot listener to re-fire with the server copy.
-          setProfile({ id: authUser.uid, ...employeeData } as Employee);
-          stopLoading('new profile created');
+          console.log('[Auth] resolveMissingProfile: doc already existed on server, no write performed');
         }
-      } catch (createErr) {
-        console.error('[Auth] Failed to auto-create or migrate employee profile:', createErr);
-        // If creation fails, stop loading to avoid blocking the UI indefinitely.
-        stopLoading('create/migrate failed');
+
+        // Deliberately do NOT call setProfile()/stopLoading() here. The
+        // onSnapshot listener already attached below will receive whatever
+        // was just committed (or was already there) and resolve loading /
+        // profile from that single source of truth, so there is never a
+        // moment where local state and Firestore disagree.
+      } catch (err) {
+        console.error('[Auth] Failed to resolve missing employee profile:', err);
       } finally {
-        // Reset the lock so a retry can be attempted on next event.
-        isCreatingProfileRef.current = false;
+        resolvingUidRef.current = null;
       }
     };
 
@@ -198,22 +229,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const docPath = `employees/${authUser.uid}`;
 
         unsubscribeProfile = onSnapshot(doc(db, 'employees', authUser.uid), (docSnap) => {
-          console.log('[Auth] profile snapshot received, exists:', docSnap.exists());
+          const fromCache = docSnap.metadata.fromCache;
+          console.log('[Auth] profile snapshot received, exists:', docSnap.exists(), 'fromCache:', fromCache);
 
           if (docSnap.exists()) {
+            // A cached copy is enough to unblock the UI immediately. This is
+            // what makes "browser restart / power outage / offline reconnect
+            // / returning after days" instant instead of stuck on a spinner:
+            // with the persistent Firestore cache (see lib/firebase.ts), the
+            // last known employee doc — including status: 'active' and all
+            // HR-entered fields — is available right away, even offline.
+            // The listener will silently refresh again once the real server
+            // snapshot arrives, but nothing here is destructive either way.
             setProfile({ id: docSnap.id, ...docSnap.data() } as Employee);
             stopLoading('profile doc exists');
-            isCreatingProfileRef.current = false;
+          } else if (fromCache) {
+            // Ambiguous, and NOT a verdict: there is no local cache entry
+            // for this employee, but we have not heard from the server yet
+            // either. This is exactly the situation that used to cause
+            // "active -> pending" — a temporary, cache-only absence being
+            // treated as proof the employee doesn't exist. We deliberately
+            // do nothing here and wait for the next snapshot, which will be
+            // server-confirmed one way or the other.
+            console.log('[Auth] no cached profile yet — waiting for server confirmation before concluding anything');
           } else {
-            console.log('[Auth] no profile found for authenticated user:', authUser.uid);
-
-            if (isCreatingProfileRef.current) {
-              return; // Already handling profile creation in the background
-            }
-            isCreatingProfileRef.current = true;
-
-            // Run the heavy migration/creation logic off to the side so this
-            // onSnapshot callback itself never blocks on it.
+            // The server itself has now confirmed there is no document for
+            // this uid. Only at this point is it safe to look at creating
+            // one (and even then, resolveMissingProfile re-verifies this
+            // inside a transaction before writing anything).
             void resolveMissingProfile(authUser);
           }
         }, (error) => {
@@ -230,7 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setProfile(null);
         stopLoading('no authenticated user');
-        isCreatingProfileRef.current = false;
+        resolvingUidRef.current = null;
       }
     });
 
@@ -251,4 +294,4 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export const useAuth = () => useContext(AuthContext);
-// 
+//
