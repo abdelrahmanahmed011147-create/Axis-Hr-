@@ -39,7 +39,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, isEmployeeEnabled } from '../lib/utils';
 import { KPICriterion, DepartmentKPINext, EmployeeEvaluation, Employee, Settings as SettingsType } from '../types';
 
 // Default preloaded KPIs for the 23 roles/departments provided
@@ -1453,14 +1453,14 @@ export const EvaluationsView: React.FC = () => {
                   >
                     <option value="">-- اختر الموظف --</option>
                     {employees
-                      .filter(e => e.department === formDept && e.status === 'active')
+                      .filter(e => e.department === formDept && isEmployeeEnabled(e))
                       .map(e => (
                         <option key={e.id} value={e.id}>
                           {e.fullName} ({e.roleCode}) - {e.jobTitle}
                         </option>
                       ))}
                   </select>
-                  {formDept && employees.filter(e => e.department === formDept && e.status === 'active').length === 0 && (
+                  {formDept && employees.filter(e => e.department === formDept && isEmployeeEnabled(e)).length === 0 && (
                     <p className="text-[10px] text-[#EF4444] font-bold">⚠️ عذراً، لا يوجد أي موظف نشط مسجل في هذا القسم</p>
                   )}
                 </div>

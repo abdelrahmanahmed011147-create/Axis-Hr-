@@ -38,7 +38,7 @@ import {
   Save,
   Shield
 } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, isEmployeeEnabled } from '../lib/utils';
 
 const getNextEmployeeCode = (employees: Employee[], offset: number = 0) => {
   let maxNum = 4; // So the next one starts at 5 (AXIS-005)
@@ -156,11 +156,18 @@ export const EmployeesDirectoryView: React.FC = () => {
     purgeSoftDeleted();
   }, []);
 
-  // Stats calculation
-  const activeCount = employees.filter(e => e.status === 'active').length;
+  // Stats calculation.
+  // NOTE: `status` no longer determines login/HR-approval (see
+  // AuthContext.tsx) — every employee document is, by definition, already
+  // approved. "Active" here means "enabled" per isEmployeeEnabled(): a
+  // missing status (or legacy 'active'/'pending' values) counts as active;
+  // only the explicit locked/inactive/archived/deleted values don't. This
+  // keeps legacy records without a status field showing correctly instead
+  // of silently disappearing from the active count.
+  const activeCount = employees.filter(e => isEmployeeEnabled(e)).length;
   const pendingCount = employees.filter(e => e.status === 'pending').length;
   const lockedCount = employees.filter(e => e.status === 'locked' || e.status === 'inactive').length;
-  const totalCount = employees.filter(e => e.status === 'active').length;
+  const totalCount = activeCount;
 
   // Fetch unique companies & departments for automatic filter options
   const uniqueCompanies = Array.from(
@@ -171,27 +178,36 @@ export const EmployeesDirectoryView: React.FC = () => {
     new Set(employees.map(e => e.department).filter(Boolean))
   );
 
-  // Status text translation helpers
-  const getStatusLabel = (status: string) => {
+  // Status text translation helpers.
+  // A missing/undefined status is a normal, approved, enabled employee
+  // (see isEmployeeEnabled in lib/utils.ts) — so it's labeled/colored
+  // identically to 'active', not as "unknown".
+  const getStatusLabel = (status?: string) => {
     switch (status) {
-      case 'active': return 'نشط';
+      case 'active':
+      case undefined:
+      case '':
+        return 'نشط';
       case 'pending': return 'قيد الانتظار';
       case 'locked': return 'مغلق';
       case 'inactive': return 'غير نشط';
       case 'archived': return 'مؤرشف';
-      default: return status || 'غير معروف';
+      default: return status || 'نشط';
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status?: string) => {
     switch (status) {
-      case 'active': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
       case 'pending': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-      case 'locked': 
-      case 'inactive': 
+      case 'locked':
+      case 'inactive':
         return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
       case 'archived': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-      default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+      case 'active':
+      case undefined:
+      case '':
+      default:
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
     }
   };
 
@@ -226,6 +242,11 @@ export const EmployeesDirectoryView: React.FC = () => {
     }));
   };
 
+  // Saves the finishing HR details (roleCode/company/department/jobTitle)
+  // for a legacy incomplete record. This does NOT "activate" login access —
+  // the employee document already existing means they're already approved
+  // (see AuthContext.tsx). `status: 'active'` is written only as a legacy
+  // display label for the directory list/exports, not as a gate.
   const handleActivatePending = async (emp: Employee) => {
     const draft = pendingForms[emp.id] || {};
     const pendingList = employees.filter(e => e.status === 'pending');
@@ -249,7 +270,7 @@ export const EmployeesDirectoryView: React.FC = () => {
       };
 
       await updateDoc(doc(db, 'employees', emp.id), updatedData);
-      toast.success(`تم تفعيل حساب الموظف بنجاح: ${emp.fullName}`);
+      toast.success(`تم استكمال بيانات الموظف بنجاح: ${emp.fullName}`);
       
       setPendingForms(prev => {
         const copy = { ...prev };
@@ -257,8 +278,8 @@ export const EmployeesDirectoryView: React.FC = () => {
         return copy;
       });
     } catch (error) {
-      console.error("Activation Error:", error);
-      toast.error('حدث خطأ أثناء تفعيل حساب الموظف');
+      console.error("Data completion error:", error);
+      toast.error('حدث خطأ أثناء حفظ بيانات الموظف');
     }
   };
 
@@ -542,15 +563,16 @@ export const EmployeesDirectoryView: React.FC = () => {
             cell.alignment = { horizontal: 'left', vertical: 'middle' };
           } else if (col === 'J') {
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
-            if (emp.status === 'active') {
-              cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: '065F46' } };
-              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D1FAE5' } };
-            } else if (emp.status === 'pending') {
+            if (emp.status === 'pending') {
               cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: '92400E' } };
               cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEF3C7' } };
-            } else {
+            } else if (emp.status === 'locked' || emp.status === 'inactive' || emp.status === 'archived' || emp.status === 'deleted') {
               cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: '991B1B' } };
               cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FEE2E2' } };
+            } else {
+              // 'active', or no status at all -> treated as a normal, enabled employee.
+              cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: '065F46' } };
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D1FAE5' } };
             }
           } else {
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
@@ -668,7 +690,7 @@ export const EmployeesDirectoryView: React.FC = () => {
               activeTab === 'pending' ? "bg-amber-500 text-black shadow-md shadow-amber-500/20" : "text-[#A78BFA] hover:text-white"
             )}
           >
-            <span>قيد الانتظار للتفعيل</span>
+            <span>استكمال بيانات موظفين جدد</span>
             {pendingCount > 0 && (
               <span className={cn(
                 "px-1.5 py-0.5 rounded-md text-[10px] font-black font-mono",
@@ -723,7 +745,7 @@ export const EmployeesDirectoryView: React.FC = () => {
             {/* Stat: Pending Activation */}
             <div className="bg-[#1E0F33]/85 backdrop-blur-2xl p-6 rounded-[2rem] border border-amber-500/10 shadow-lg relative flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-xs font-bold text-amber-400 block">قيد الانتظار للتفعيل</span>
+                <span className="text-xs font-bold text-amber-400 block">بيانات ناقصة</span>
                 <span className="text-3xl font-black text-white block">{pendingCount}</span>
               </div>
               <div className="w-12 h-12 bg-amber-500/5 border border-amber-500/10 rounded-2xl flex items-center justify-center text-amber-400">
@@ -1001,7 +1023,12 @@ export const EmployeesDirectoryView: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 3: Employees Pending Activation */}
+      {/* Tab 3: Legacy employee records still missing HR data.
+          NOTE: this tab no longer gates login/access — an employee document
+          existing at all already means the employee is approved (see
+          AuthContext.tsx). This is purely a convenience list for finishing
+          the profile of older records that predate this data model, or
+          records HR wants to double check. */}
       {activeTab === 'pending' && (
         <div className="space-y-8 animate-in fade-in duration-300">
           <div className="bg-[#1E0F33]/60 backdrop-blur-2xl p-10 rounded-[3rem] border border-white/5 relative overflow-hidden shadow-2xl">
@@ -1013,12 +1040,12 @@ export const EmployeesDirectoryView: React.FC = () => {
                   <Clock size={28} />
                 </div>
                 <div>
-                  <h3 className="text-3xl font-black text-amber-200">طلبات تفعيل الموظفين الجدد</h3>
-                  <p className="text-[#A78BFA] text-sm mt-1">الحسابات الجديدة التي سجلت عبر Google وبانتظار تعيين بياناتها وتأكيد عضويتها لبدء العمل</p>
+                  <h3 className="text-3xl font-black text-amber-200">استكمال بيانات الموظفين</h3>
+                  <p className="text-[#A78BFA] text-sm mt-1">هؤلاء الموظفون لديهم بالفعل صلاحية الدخول للنظام — هذه القائمة فقط لاستكمال كود التوظيف والموقع الوظيفي وباقي بياناتهم</p>
                 </div>
               </div>
               <div className="bg-amber-500/10 text-amber-300 font-mono font-black text-sm px-5 py-2 rounded-2xl border border-amber-500/20 shrink-0 shadow-inner">
-                قيد الانتظار ({employees.filter(emp => emp.status === 'pending').length})
+                بيانات ناقصة ({employees.filter(emp => emp.status === 'pending').length})
               </div>
             </div>
 
@@ -1027,9 +1054,9 @@ export const EmployeesDirectoryView: React.FC = () => {
                 <div className="w-16 h-16 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center text-emerald-400 mx-auto mb-6 shadow-inner animate-pulse">
                   <CheckCircle size={32} />
                 </div>
-                <h4 className="text-xl font-black text-white mb-2">لا توجد طلبات تفعيل معلقة حالياً</h4>
+                <h4 className="text-xl font-black text-white mb-2">لا توجد بيانات ناقصة حالياً</h4>
                 <p className="text-sm text-[#A78BFA]/70 max-w-md mx-auto leading-relaxed">
-                  جميع حسابات الموظفين المسجلة عبر جوجل مفعلة بالكامل ونشطة مع تحديد كود التوظيف والموقع الوظيفي.
+                  جميع الموظفين لديهم كود توظيف وموقع وظيفي محددّين بالكامل.
                 </p>
               </div>
             ) : (
@@ -1120,7 +1147,7 @@ export const EmployeesDirectoryView: React.FC = () => {
                             onClick={() => handleActivatePending(emp)}
                             className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 px-3 rounded-xl font-black text-xs transition-colors shadow-lg active:scale-95 whitespace-nowrap"
                           >
-                            تفعيل وتأكيد العضوية
+                            حفظ واستكمال البيانات
                           </button>
                         </div>
                       </div>

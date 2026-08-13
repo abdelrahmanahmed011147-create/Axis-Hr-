@@ -25,7 +25,7 @@ import { auth } from './lib/firebase';
 import { NotificationItem } from './types';
 
 function AppContent() {
-  const { user, profile, loading, isAdmin } = useAuth();
+  const { user, profile, loading, isAdmin, awaitingApproval } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
 
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
@@ -226,19 +226,13 @@ function AppContent() {
     return <AuthView />;
   }
 
-  if (!profile) {
-    return (
-      <div className="min-h-screen bg-[#12071F] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#7C3AED]/20 border-t-[#C084FC] rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-[#A78BFA] animate-pulse">جاري سحب ملف الموظف...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Pending activation block
-  if (profile.status !== 'active') {
+  // Existence-based approval gate: a Firebase Auth user exists, but HR has
+  // not yet created/approved an employees/{uid} profile for them. This is
+  // NOT a "loading" state (loading === false here) and it does NOT depend
+  // on any status field — it is purely "no employee document was found".
+  // See AuthContext.tsx for how this is resolved (including self-healing
+  // when HR has already pre-created a record under a different id).
+  if (awaitingApproval) {
     return (
       <div className="min-h-screen bg-[#12071F] flex items-center justify-center p-4 select-none" dir="rtl">
         <div className="w-full max-w-md bg-[#1E0F33]/85 backdrop-blur-2xl p-10 rounded-[3rem] border border-[#7C3AED]/20 shadow-2xl relative z-10 text-center">
@@ -247,21 +241,21 @@ function AppContent() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          
-          <h2 className="text-2xl font-black text-white mb-2">تفعيل حساب الموظف</h2>
+
+          <h2 className="text-2xl font-black text-white mb-2">في انتظار إعداد الحساب</h2>
           <p className="text-[#A78BFA] text-sm leading-relaxed mb-6">
-            مرحباً بك، <span className="text-white font-black">{profile.fullName || 'زميلنا الجديد'}</span>
+            مرحباً بك، <span className="text-white font-black">{user.displayName || 'زميلنا الجديد'}</span>
           </p>
 
           <div className="p-5 bg-white/5 border border-white/5 rounded-2xl text-[#E0E7FF] text-sm font-medium leading-relaxed mb-6">
-             حسابك قيد الانتظار للتفعيل حالياً. يرجى التواصل مع إدارة الموارد البشرية (HR) لتنشيط حسابك واستكمال بياناتك الوظيفية.
+            لم يتم إنشاء ملف الموظف الخاص بك بعد. يرجى التواصل مع إدارة الموارد البشرية (HR) لإضافة بياناتك الوظيفية. بمجرد إنشاء الملف، ستدخل النظام تلقائياً دون الحاجة لأي إجراء آخر — ولن يُطلب منك ذلك مرة أخرى بعد اليوم.
           </div>
 
           <div className="space-y-4">
             <div className="text-xs text-[#A78BFA]/50 font-mono">
-              البريد: {profile.email}
+              البريد: {user.email}
             </div>
-            
+
             <button
               onClick={() => auth.signOut()}
               className="w-full bg-white/5 border border-white/10 hover:bg-white/10 text-[#A78BFA] hover:text-white py-3.5 px-6 rounded-2xl text-xs font-bold transition-all"
@@ -272,6 +266,15 @@ function AppContent() {
         </div>
       </div>
     );
+  }
+
+  // At this point: user is authenticated AND awaitingApproval is false,
+  // which (see AuthContext.tsx) is only possible once `profile` has been
+  // set from an existing employees/{uid} document. This check exists only
+  // to satisfy TypeScript's null narrowing for the rest of the component —
+  // it is not a real "still loading" state.
+  if (!profile) {
+    return null;
   }
 
   const renderContent = () => {

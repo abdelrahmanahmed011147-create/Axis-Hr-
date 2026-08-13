@@ -10,7 +10,14 @@ export interface Employee {
   jobTitle: string;
   phone: string;
   email: string;
-  status: 'active' | 'inactive' | 'pending' | 'locked' | 'archived' | 'deleted';
+  // NOTE: `status` NO LONGER controls login/HR-approval. Approval is
+  // determined purely by the existence of the employees/{uid} document
+  // (see AuthContext.tsx). This field is now optional and only used for
+  // explicit, HR-driven account-control (locking/archiving/soft-deleting
+  // an employee) and legacy display purposes. A missing status (or the
+  // legacy 'active'/'pending' values) always means "a normal, enabled
+  // employee" — see isEmployeeEnabled() in lib/utils.ts.
+  status?: 'active' | 'inactive' | 'pending' | 'locked' | 'archived' | 'deleted';
   createdAt: any;
   
   // Detailed HR Fields

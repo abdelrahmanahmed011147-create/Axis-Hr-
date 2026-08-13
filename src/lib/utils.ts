@@ -6,6 +6,24 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * A "disabled" employee account state. This is an EXPLICIT, HR-driven
+ * account-control concept (lock / archive / soft-delete) and is completely
+ * separate from login/HR-approval, which is now determined purely by the
+ * existence of the employees/{uid} document (see AuthContext.tsx).
+ *
+ * `status` is optional on Employee going forward. A document with no
+ * `status` field at all (or the legacy 'active' / 'pending' values) is
+ * always treated as a normal, enabled employee — only these explicit
+ * values disable an employee from normal listings/counters.
+ */
+const DISABLED_EMPLOYEE_STATUSES = new Set(['locked', 'inactive', 'archived', 'deleted']);
+
+export function isEmployeeEnabled(emp: { status?: string } | null | undefined): boolean {
+  if (!emp || !emp.status) return true;
+  return !DISABLED_EMPLOYEE_STATUSES.has(emp.status);
+}
+
 const CAIRO_TZ = 'Africa/Cairo';
 
 export function getCairoOffset(date: Date): number {

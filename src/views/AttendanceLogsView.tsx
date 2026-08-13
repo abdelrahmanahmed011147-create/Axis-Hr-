@@ -26,7 +26,7 @@ import {
   AlertCircle,
   Edit
 } from 'lucide-react';
-import { cn, formatCairoDate, formatTimeTo12Hour, formatDelayToArabic, calculatePermissionHours } from '../lib/utils';
+import { cn, formatCairoDate, formatTimeTo12Hour, formatDelayToArabic, calculatePermissionHours, isEmployeeEnabled } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -248,7 +248,7 @@ export const AttendanceLogsView: React.FC = () => {
   useEffect(() => {
     if (!isAdmin) return;
     const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
-      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)).filter(e => e.status === 'active'));
+      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)).filter(e => isEmployeeEnabled(e)));
     });
 
     const unsubSettings = onSnapshot(doc(db, 'settings', 'system_config'), (snap) => {

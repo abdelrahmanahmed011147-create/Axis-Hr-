@@ -5,7 +5,7 @@ import { recalculateAttendanceForUserAndDate } from '../lib/attendanceUtils';
 import { Employee, Attendance, LeaveRequest } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { Users, UserCheck, Clock, AlertTriangle, FileText, Check, TrendingUp, Calendar, MapPin, ShieldCheck, AlertCircle, X, Search, Shield } from 'lucide-react';
-import { cn, formatCairoDate, formatCairoTime, formatStringTimeTo12Hour } from '../lib/utils';
+import { cn, formatCairoDate, formatCairoTime, formatStringTimeTo12Hour, isEmployeeEnabled } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
 
@@ -92,7 +92,12 @@ export const CompanyDashboard: React.FC = () => {
       setEmployees(
         snap.docs
           .map(d => ({ id: d.id, ...d.data() } as Employee))
-          .filter(e => e.status === 'active' && !(e as any).migrated)
+          // Every employee document is, by definition, already approved
+          // (see AuthContext.tsx) — a missing/undefined `status` (or the
+          // legacy 'active'/'pending' values) is a normal, enabled
+          // employee. Only explicit locked/inactive/archived/deleted
+          // statuses are excluded here.
+          .filter(e => isEmployeeEnabled(e) && !(e as any).migrated)
       );
     }, (error) => {
       console.error("Employees fetch error:", error);
@@ -121,11 +126,12 @@ export const CompanyDashboard: React.FC = () => {
     .filter(a => isDateInFilter(a.date))
     .reduce((acc, curr) => acc + (curr.deductionValue || 0), 0);
   const pendingRequests = requests.filter(r => r.status === 'Pending');
-  const activeEmployees = employees.filter(e => e.status === 'active');
+  // `employees` state above is already filtered to enabled employees only.
+  const activeEmployees = employees;
 
   // Compute leaderboards metrics
   const leaderboards = useMemo(() => {
-    const activeEmps = employees.filter(e => e.status === 'active');
+    const activeEmps = employees;
     
     // 1. Commitment and Attendance stats
     const empAttendanceStats = activeEmps.map(emp => {

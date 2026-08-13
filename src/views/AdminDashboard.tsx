@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, setDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
-import { getApps, initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, setDoc, serverTimestamp, where, getDocs, addDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { recalculateAttendanceForUserAndDate } from '../lib/attendanceUtils';
-import firebaseConfig from '../../firebase-applet-config.json';
 import { Employee, Attendance, LeaveRequest, Settings as SettingsType } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { Users, UserCheck, Clock, AlertTriangle, FileText, Check, X, Search, Filter, UserPlus, Phone, Lock, Briefcase, User, Code, Building, Mail, Calendar, Shield } from 'lucide-react';
@@ -29,7 +26,6 @@ export const AdminDashboard: React.FC = () => {
     jobTitle: '',
     company: '',
     phone: '',
-    password: 'password123'
   });
 
   useEffect(() => {
@@ -81,10 +77,33 @@ export const AdminDashboard: React.FC = () => {
     };
   }, []);
 
+  // ------------------------------------------------------------------
+  // ARCHITECTURE NOTE: HR "approval" of an employee = creating/updating
+  // their employees/{uid} Firestore document. Nothing else.
+  //
+  // This function used to also create a SEPARATE Firebase Auth account via
+  // createUserWithEmailAndPassword(). That was the root cause of a whole
+  // class of bugs: the app's only real sign-in method is Google
+  // (AuthView.tsx), which gives an employee a Firebase Auth uid that has
+  // NOTHING to do with the uid of that throwaway email/password account.
+  // Every employee added this way was therefore stored under the WRONG
+  // document id relative to how they would ever actually log in, forcing
+  // AuthContext's self-healing email-migration path to run on every one of
+  // their sign-ins and making the whole flow depend on Firebase Auth
+  // account-linking settings that may not even be configured.
+  //
+  // The fix: HR only ever writes to Firestore here. We pre-provision the
+  // employee's profile under a plain (non-auth) document id, keyed to
+  // their email. The very first time this person actually signs in with
+  // Google, AuthContext.tsx's resolveMissingProfile() finds this record by
+  // email and links/migrates it to their real Firebase Auth uid — the
+  // exact same well-tested path already used for every other case. No
+  // parallel Auth account, no password to manage, no mismatched ids.
+  // ------------------------------------------------------------------
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setNewUserLoading(true);
-    
+
     if (!newUser.roleCode || !newUser.fullName || !newUser.email) {
       toast.error('يرجى ملء البيانات الأساسية بما في ذلك البريد الإلكتروني');
       setNewUserLoading(false);
@@ -92,25 +111,20 @@ export const AdminDashboard: React.FC = () => {
     }
 
     try {
-      // 1. Check if email exists in Firestore first
+      // Check the email isn't already used by another employee document.
       const emailLower = newUser.email.trim().toLowerCase();
       const q = query(collection(db, 'employees'), where('email', '==', emailLower));
       const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
+      const existingLive = querySnapshot.docs.find(d => !d.data().migrated);
+
+      if (existingLive) {
         toast.error('هذا البريد الإلكتروني مسجل بالفعل لموظف آخر في قاعدة البيانات');
         setNewUserLoading(false);
         return;
       }
 
-      const secondaryApp = getApps().find(app => app.name === 'SecondaryApp') || initializeApp(firebaseConfig, 'SecondaryApp');
-      const secondaryAuth = getAuth(secondaryApp);
-
-      const result = await createUserWithEmailAndPassword(secondaryAuth, emailLower, newUser.password);
-      const user = result.user;
-      
-      const role = newUser.roleCode.toUpperCase().includes('MASTER') ? 
-        (newUser.roleCode.toUpperCase().includes('GM') ? 'GM-MASTER' : 'HR-MASTER') : 
+      const role = newUser.roleCode.toUpperCase().includes('MASTER') ?
+        (newUser.roleCode.toUpperCase().includes('GM') ? 'GM-MASTER' : 'HR-MASTER') :
         'EMPLOYEE';
 
       const employeeData = {
@@ -126,12 +140,12 @@ export const AdminDashboard: React.FC = () => {
         createdAt: serverTimestamp(),
       };
 
-      // Ensure data is saved to Firestore
-      await setDoc(doc(db, 'employees', user.uid), employeeData);
-      
-      await signOut(secondaryAuth);
-      
-      toast.success(`تم إنشاء حساب الموظف بنجاح: ${newUser.fullName}`);
+      // Pre-provision the employee profile in Firestore only. Its document
+      // id is just a placeholder until the employee's first real Google
+      // sign-in links it to their actual Firebase Auth uid.
+      await addDoc(collection(db, 'employees'), employeeData);
+
+      toast.success(`تم إنشاء ملف الموظف بنجاح: ${newUser.fullName}. سيتم ربطه تلقائياً بحسابه عند أول تسجيل دخول له عبر Google.`);
       setNewUser({
         fullName: '',
         email: '',
@@ -140,26 +154,11 @@ export const AdminDashboard: React.FC = () => {
         jobTitle: settings?.jobTitles?.[0] || '',
         company: settings?.companies?.[0] || '',
         phone: '',
-        password: 'password123'
       });
       setIsAddingEmployee(false);
     } catch (error: any) {
       console.error("Create user error:", error);
-      const isEmailInUse = error.code === 'auth/email-already-in-use' || 
-                           String(error.code || '').includes('email-already-in-use') ||
-                           String(error.message || '').includes('email-already-in-use') ||
-                           String(error.message || '').includes('auth/email-already-in-use');
-      
-      if (isEmailInUse) {
-        const existInList = employees.some(e => e.email?.toLowerCase() === newUser.email.toLowerCase());
-        if (!existInList) {
-          toast.error('هذا البريد الإلكتروني مسجل مسبقاً في نظام الهوية بالكامل. يمكن للموظف تسجيل الدخول مباشرة وبدء تشغيل حسابه بضغطة زر عبر Google!');
-        } else {
-          toast.error('هذا البريد الإلكتروني مسجل بالفعل لموظف آخر في قاعدة البيانات.');
-        }
-      } else {
-        toast.error(`خطأ: ${error.message || 'فشل إنشاء الحساب'}`);
-      }
+      toast.error(`خطأ: ${error.message || 'فشل إنشاء ملف الموظف'}`);
     } finally {
       setNewUserLoading(false);
     }
