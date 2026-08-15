@@ -44,9 +44,9 @@ export const EmployeeAttendanceView: React.FC = () => {
 
     // Fetch attendance for current employee
     const attQuery = query(
-      collection(db, 'attendance'),
-      where('roleCode', '==', profile.roleCode)
-    );
+  collection(db, 'attendance'),
+  where('userId', '==', profile.id)
+);
 
     const unsubAttendance = onSnapshot(attQuery, (snap) => {
       const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance));
