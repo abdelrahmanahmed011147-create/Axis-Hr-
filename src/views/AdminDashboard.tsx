@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, setDoc, serverTimestamp, where, getDocs, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { recalculateAttendanceForUserAndDate } from '../lib/attendanceUtils';
 import { Employee, Attendance, LeaveRequest, Settings as SettingsType } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { Users, UserCheck, Clock, AlertTriangle, FileText, Check, X, Search, Filter, UserPlus, Phone, Lock, Briefcase, User, Code, Building, Mail, Calendar, Shield } from 'lucide-react';
+import { Users, UserCheck, Clock, AlertTriangle, FileText, Check, X, Search, Filter, Phone, Lock, Briefcase, User, Code, Building, Mail, Calendar, Shield } from 'lucide-react';
 import { cn, formatCairoDate, getCairoNow, formatStringTimeTo12Hour } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
@@ -15,18 +15,7 @@ export const AdminDashboard: React.FC = () => {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
-  const [newUserLoading, setNewUserLoading] = useState(false);
   const [settings, setSettings] = useState<SettingsType | null>(null);
-  const [newUser, setNewUser] = useState({
-    fullName: '',
-    email: '',
-    roleCode: '',
-    department: '',
-    jobTitle: '',
-    company: '',
-    phone: '',
-  });
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -56,12 +45,6 @@ export const AdminDashboard: React.FC = () => {
           data.companies = ["مجموعة أكسس", "شركة مدار", "شركة جذور", "الأكاديمي"];
         }
         setSettings(data);
-        setNewUser(prev => ({
-          ...prev,
-          department: prev.department || data.departments?.[0] || '',
-          jobTitle: prev.jobTitle || data.jobTitles?.[0] || '',
-          company: prev.company || data.companies?.[0] || '',
-        }));
       } else {
         setSettings({} as any);
       }
@@ -77,92 +60,12 @@ export const AdminDashboard: React.FC = () => {
     };
   }, []);
 
-  // ------------------------------------------------------------------
-  // ARCHITECTURE NOTE: HR "approval" of an employee = creating/updating
-  // their employees/{uid} Firestore document. Nothing else.
-  //
-  // This function used to also create a SEPARATE Firebase Auth account via
-  // createUserWithEmailAndPassword(). That was the root cause of a whole
-  // class of bugs: the app's only real sign-in method is Google
-  // (AuthView.tsx), which gives an employee a Firebase Auth uid that has
-  // NOTHING to do with the uid of that throwaway email/password account.
-  // Every employee added this way was therefore stored under the WRONG
-  // document id relative to how they would ever actually log in, forcing
-  // AuthContext's self-healing email-migration path to run on every one of
-  // their sign-ins and making the whole flow depend on Firebase Auth
-  // account-linking settings that may not even be configured.
-  //
-  // The fix: HR only ever writes to Firestore here. We pre-provision the
-  // employee's profile under a plain (non-auth) document id, keyed to
-  // their email. The very first time this person actually signs in with
-  // Google, AuthContext.tsx's resolveMissingProfile() finds this record by
-  // email and links/migrates it to their real Firebase Auth uid — the
-  // exact same well-tested path already used for every other case. No
-  // parallel Auth account, no password to manage, no mismatched ids.
-  // ------------------------------------------------------------------
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setNewUserLoading(true);
-
-    if (!newUser.roleCode || !newUser.fullName || !newUser.email) {
-      toast.error('يرجى ملء البيانات الأساسية بما في ذلك البريد الإلكتروني');
-      setNewUserLoading(false);
-      return;
-    }
-
-    try {
-      // Check the email isn't already used by another employee document.
-      const emailLower = newUser.email.trim().toLowerCase();
-      const q = query(collection(db, 'employees'), where('email', '==', emailLower));
-      const querySnapshot = await getDocs(q);
-      const existingLive = querySnapshot.docs.find(d => !d.data().migrated);
-
-      if (existingLive) {
-        toast.error('هذا البريد الإلكتروني مسجل بالفعل لموظف آخر في قاعدة البيانات');
-        setNewUserLoading(false);
-        return;
-      }
-
-      const role = newUser.roleCode.toUpperCase().includes('MASTER') ?
-        (newUser.roleCode.toUpperCase().includes('GM') ? 'GM-MASTER' : 'HR-MASTER') :
-        'EMPLOYEE';
-
-      const employeeData = {
-        roleCode: newUser.roleCode,
-        fullName: newUser.fullName,
-        role: role,
-        company: newUser.company || settings?.companies?.[0] || 'مجموعة أكسس',
-        department: newUser.department || settings?.departments?.[0] || 'General',
-        jobTitle: newUser.jobTitle || settings?.jobTitles?.[0] || 'Employee',
-        phone: newUser.phone,
-        email: emailLower,
-        status: 'active',
-        createdAt: serverTimestamp(),
-      };
-
-      // Pre-provision the employee profile in Firestore only. Its document
-      // id is just a placeholder until the employee's first real Google
-      // sign-in links it to their actual Firebase Auth uid.
-      await addDoc(collection(db, 'employees'), employeeData);
-
-      toast.success(`تم إنشاء ملف الموظف بنجاح: ${newUser.fullName}. سيتم ربطه تلقائياً بحسابه عند أول تسجيل دخول له عبر Google.`);
-      setNewUser({
-        fullName: '',
-        email: '',
-        roleCode: '',
-        department: settings?.departments?.[0] || '',
-        jobTitle: settings?.jobTitles?.[0] || '',
-        company: settings?.companies?.[0] || '',
-        phone: '',
-      });
-      setIsAddingEmployee(false);
-    } catch (error: any) {
-      console.error("Create user error:", error);
-      toast.error(`خطأ: ${error.message || 'فشل إنشاء ملف الموظف'}`);
-    } finally {
-      setNewUserLoading(false);
-    }
-  };
+  // NOTE: employee onboarding ("إضافة موظف") lives in
+  // EmployeesDirectoryView.tsx ("بيانات الموظفين") — not here. It only
+  // ever writes a Firestore employees/ document (never a Firebase Auth
+  // account); AuthContext.tsx's resolveMissingProfile() links it to the
+  // employee's real Google UID on their first sign-in. Keeping a single
+  // onboarding entry point avoids two conflicting creation flows.
 
   const getTypeLabel = (type: string) => {
     switch (type) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, where, doc, updateDoc, serverTimestamp, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, addDoc, updateDoc, serverTimestamp, deleteDoc, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import ExcelJS from 'exceljs';
 import { Employee, Settings as SettingsType } from '../types';
@@ -36,7 +36,9 @@ import {
   CheckCircle,
   XCircle,
   Save,
-  Shield
+  Shield,
+  UserPlus,
+  Plus
 } from 'lucide-react';
 import { cn, isEmployeeEnabled } from '../lib/utils';
 
@@ -90,6 +92,25 @@ export const EmployeesDirectoryView: React.FC = () => {
   const [activeEditTab, setActiveEditTab] = useState<'job' | 'financial' | 'personal' | 'education'>('job');
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
   const [pendingForms, setPendingForms] = useState<Record<string, Partial<Employee>>>({});
+
+  // "إضافة موظف" (Add Employee) modal state — HR onboarding entry point.
+  // This is Firestore-only: it NEVER creates a Firebase Auth account or a
+  // password. The employee authenticates themselves later via Google
+  // Sign-In, and AuthContext.tsx links this record to their real Google
+  // UID by matching the email below (see resolveMissingProfile).
+  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [addEmployeeLoading, setAddEmployeeLoading] = useState(false);
+  const [newEmployeeForm, setNewEmployeeForm] = useState({
+    email: '',
+    fullName: '',
+    phone: '',
+    company: '',
+    department: '',
+    jobTitle: '',
+    roleCode: '',
+    role: 'EMPLOYEE' as 'EMPLOYEE' | 'HR-MASTER' | 'GM-MASTER',
+    basicSalary: '',
+  });
 
   // Real-time listener for employees
   useEffect(() => {
@@ -282,6 +303,103 @@ export const EmployeesDirectoryView: React.FC = () => {
       toast.error('حدث خطأ أثناء حفظ بيانات الموظف');
     }
   };
+
+  const openAddEmployeeModal = () => {
+    setNewEmployeeForm({
+      email: '',
+      fullName: '',
+      phone: '',
+      company: settings?.companies?.[0] || 'مجموعة أكسس',
+      department: settings?.departments?.[0] || 'General',
+      jobTitle: settings?.jobTitles?.[0] || 'Employee',
+      roleCode: '',
+      role: 'EMPLOYEE',
+      basicSalary: '',
+    });
+    setIsAddingEmployee(true);
+  };
+
+  // ------------------------------------------------------------------
+  // HR onboarding entry point ("إضافة موظف"). This is the ONLY place a new
+  // employees/ document gets created from the HR dashboard, and it is
+  // deliberately Firestore-only:
+  //   - NO createUserWithEmailAndPassword()
+  //   - NO Firebase Authentication account of any kind
+  //   - NO password is created, requested, or stored
+  // The employee's Firebase Auth identity is created/managed entirely by
+  // Google when they sign in themselves via "تسجيل الدخول باستخدام
+  // Google". AuthContext.tsx's resolveMissingProfile() then matches their
+  // Google account's email against this record and links it to
+  // employees/{realGoogleUid} — reusing the exact same self-healing
+  // migration path already used everywhere else, so all HR-entered data
+  // here is preserved byte-for-byte, never replaced with defaults.
+  // ------------------------------------------------------------------
+  const handleAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const email = newEmployeeForm.email.trim().toLowerCase();
+    const fullName = newEmployeeForm.fullName.trim();
+
+    if (!email || !fullName) {
+      toast.error('البريد الإلكتروني (Google) والاسم الكامل مطلوبان');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('يرجى إدخال بريد إلكتروني صحيح (بريد Google الذي سيسجل الموظف الدخول به)');
+      return;
+    }
+
+    setAddEmployeeLoading(true);
+    try {
+      // Refuse to create a second record for an email that's already live
+      // elsewhere (either already linked to a real UID, or still an
+      // unlinked pre-provisioned record) — never duplicate accounts.
+      const q = query(collection(db, 'employees'), where('email', '==', email));
+      const qSnap = await getDocs(q);
+      const existingLive = qSnap.docs.find(d => !d.data().migrated);
+
+      if (existingLive) {
+        toast.error('هذا البريد الإلكتروني مسجل بالفعل لموظف آخر في قاعدة البيانات');
+        setAddEmployeeLoading(false);
+        return;
+      }
+
+      const roleCode = newEmployeeForm.roleCode.trim() || getNextEmployeeCode(employees);
+
+      const employeeData: Record<string, any> = {
+        email,
+        fullName,
+        phone: newEmployeeForm.phone.trim(),
+        company: newEmployeeForm.company || settings?.companies?.[0] || 'مجموعة أكسس',
+        department: newEmployeeForm.department || settings?.departments?.[0] || 'General',
+        jobTitle: newEmployeeForm.jobTitle || settings?.jobTitles?.[0] || 'Employee',
+        roleCode,
+        role: newEmployeeForm.role,
+        // Cosmetic/legacy label only — does NOT gate login. Approval is
+        // purely "this document exists" (see AuthContext.tsx).
+        status: 'active',
+        createdAt: serverTimestamp(),
+      };
+
+      if (newEmployeeForm.basicSalary.trim()) {
+        employeeData.basicSalary = newEmployeeForm.basicSalary.trim();
+      }
+
+      // Firestore-only write. Its document id is just a placeholder until
+      // the employee's first real Google sign-in links it to their actual
+      // Firebase Auth uid — no Auth account is created here or ever by HR.
+      await addDoc(collection(db, 'employees'), employeeData);
+
+      toast.success(`تم حفظ بيانات الموظف: ${fullName}. سيدخل النظام تلقائياً فور تسجيله بحساب Google (${email}) دون أي خطوة إضافية.`);
+      setIsAddingEmployee(false);
+    } catch (error) {
+      console.error('Add employee error:', error);
+      toast.error('حدث خطأ أثناء حفظ بيانات الموظف');
+    } finally {
+      setAddEmployeeLoading(false);
+    }
+  };
+
 
   const handleEdit = (emp: Employee) => {
     setEditingEmployee(emp.id);
@@ -707,8 +825,15 @@ export const EmployeesDirectoryView: React.FC = () => {
       {activeTab === 'directory' && (
         <div className="space-y-8 animate-in fade-in duration-300">
           
-          {/* Main Action Block: Download Excel Button */}
-          <div className="flex justify-end">
+          {/* Main Action Block: Add Employee + Download Excel */}
+          <div className="flex flex-col sm:flex-row justify-end gap-4">
+            <button
+              onClick={openAddEmployeeModal}
+              className="flex items-center justify-center gap-3 bg-gradient-to-r from-[#7C3AED] to-[#C084FC] hover:from-[#6D28D9] hover:to-[#A855F7] text-white font-black text-sm py-4 px-8 rounded-2xl shadow-xl shadow-[#7C3AED]/20 hover:shadow-[#7C3AED]/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
+              <UserPlus size={20} />
+              <span>إضافة موظف</span>
+            </button>
             <button
               onClick={exportToExcel}
               className="flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-sm py-4 px-8 rounded-2xl shadow-xl shadow-emerald-500/10 hover:shadow-emerald-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all"
@@ -1458,6 +1583,184 @@ export const EmployeesDirectoryView: React.FC = () => {
       </AnimatePresence>
 
       {/* Detailed Employee Editing Modal Drawer (With 4 internal tabs: Job, salary, personal, education) */}
+      {/* "إضافة موظف" Modal — Firestore-only onboarding. No Firebase Auth
+          account or password is ever created here (see handleAddEmployee
+          above). */}
+      <AnimatePresence>
+        {isAddingEmployee && (
+          <div className="fixed inset-0 bg-[#090312]/90 backdrop-blur-2xl z-50 flex items-center justify-center p-4 md:p-8" dir="rtl">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 50 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 50 }}
+              className="bg-[#190a2c] border border-white/10 w-full max-w-2xl rounded-[2.5rem] shadow-[0_40px_120px_rgba(124,58,237,0.15)] overflow-hidden flex flex-col my-auto max-h-[92vh]"
+            >
+              {/* Modal Header */}
+              <div className="p-8 border-b border-white/5 relative bg-gradient-to-l from-[#7C3AED]/10 to-transparent flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-[#7C3AED]/20 border border-[#7C3AED]/40 flex items-center justify-center text-[#C084FC]">
+                    <UserPlus size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-white">إضافة موظف</h3>
+                    <p className="text-[#A78BFA] text-xs mt-1 font-bold max-w-md leading-relaxed">
+                      يتم هنا حفظ بيانات الموظف فقط. لن يتم إنشاء أي حساب أو كلمة مرور — الموظف يسجل دخوله بنفسه لاحقاً عبر Google، وسيتم ربط بياناته تلقائياً بمجرد أول تسجيل دخول له بنفس البريد الإلكتروني.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingEmployee(false)}
+                  className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-white/10 text-white transition-all text-xl shrink-0"
+                  title="إغلاق"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form onSubmit={handleAddEmployee} className="overflow-y-auto p-8 flex-1 bg-[#12071F]/20 space-y-6">
+                {/* Google Email — the single most important field */}
+                <div className="space-y-2">
+                  <label className="text-xs text-[#A78BFA] font-bold px-1 flex items-center gap-2">
+                    <Mail size={14} />
+                    البريد الإلكتروني (Google) <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="employee@gmail.com"
+                    value={newEmployeeForm.email}
+                    onChange={e => setNewEmployeeForm(prev => ({ ...prev, email: e.target.value }))}
+                    dir="ltr"
+                    className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white placeholder-[#A78BFA]/40 focus:border-[#C084FC] outline-none transition-all text-left"
+                  />
+                  <p className="text-[10px] text-[#A78BFA]/60 px-1">
+                    يجب أن يكون هذا هو نفس بريد حساب Google الذي سيستخدمه الموظف لتسجيل الدخول.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">الاسم الكامل <span className="text-rose-400">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      value={newEmployeeForm.fullName}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, fullName: e.target.value }))}
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white focus:border-[#C084FC] outline-none transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">رقم الهاتف</label>
+                    <input
+                      type="tel"
+                      value={newEmployeeForm.phone}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, phone: e.target.value }))}
+                      dir="ltr"
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white focus:border-[#C084FC] outline-none transition-all text-left"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">كود الموظف</label>
+                    <input
+                      type="text"
+                      placeholder={getNextEmployeeCode(employees)}
+                      value={newEmployeeForm.roleCode}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, roleCode: e.target.value }))}
+                      dir="ltr"
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white placeholder-[#A78BFA]/40 focus:border-[#C084FC] outline-none transition-all text-left"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">الصلاحية</label>
+                    <select
+                      value={newEmployeeForm.role}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, role: e.target.value as any }))}
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white focus:border-[#C084FC] outline-none transition-all appearance-none cursor-pointer"
+                    >
+                      <option value="EMPLOYEE">موظف</option>
+                      <option value="HR-MASTER">مسؤول موارد بشرية (HR)</option>
+                      <option value="GM-MASTER">مدير عام (GM)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">الشركة</label>
+                    <select
+                      value={newEmployeeForm.company}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, company: e.target.value }))}
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white focus:border-[#C084FC] outline-none transition-all appearance-none cursor-pointer"
+                    >
+                      {(settings?.companies?.length ? settings.companies : ['مجموعة أكسس']).map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">القسم / الإدارة</label>
+                    <select
+                      value={newEmployeeForm.department}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, department: e.target.value }))}
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white focus:border-[#C084FC] outline-none transition-all appearance-none cursor-pointer"
+                    >
+                      {(settings?.departments?.length ? settings.departments : ['General']).map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">المسمى الوظيفي</label>
+                    <select
+                      value={newEmployeeForm.jobTitle}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, jobTitle: e.target.value }))}
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white focus:border-[#C084FC] outline-none transition-all appearance-none cursor-pointer"
+                    >
+                      {(settings?.jobTitles?.length ? settings.jobTitles : ['Employee']).map(j => (
+                        <option key={j} value={j}>{j}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs text-[#A78BFA] font-bold px-1">الراتب الأساسي</label>
+                    <input
+                      type="number"
+                      value={newEmployeeForm.basicSalary}
+                      onChange={e => setNewEmployeeForm(prev => ({ ...prev, basicSalary: e.target.value }))}
+                      dir="ltr"
+                      className="w-full bg-[#12071F]/80 border border-white/10 rounded-2xl py-3.5 px-5 text-sm text-white focus:border-[#C084FC] outline-none transition-all text-left"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 pt-4 border-t border-white/5">
+                  <button
+                    type="submit"
+                    disabled={addEmployeeLoading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-50 disabled:cursor-not-allowed text-white font-black text-sm py-4 px-8 rounded-2xl shadow-lg shadow-[#7C3AED]/20 transition-all"
+                  >
+                    <Save size={18} />
+                    <span>{addEmployeeLoading ? 'جارِ الحفظ...' : 'حفظ بيانات الموظف'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingEmployee(false)}
+                    className="px-8 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 text-[#A78BFA] hover:text-white font-black text-sm transition-all"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {editingEmployee && (
           <div className="fixed inset-0 bg-[#090312]/90 backdrop-blur-2xl z-50 flex items-center justify-center p-4 md:p-8" dir="rtl">
