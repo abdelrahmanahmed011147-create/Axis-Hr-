@@ -3,7 +3,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, update
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { recalculateAttendanceForUserAndDate } from '../lib/attendanceUtils';
 import { useAuth } from '../context/AuthContext';
-import { getCairoNow, formatCairoDate, formatCairoTime, calculateDeduction, cn, formatTimeTo12Hour, formatDelayToArabic, formatStringTimeTo12Hour, getCairoOffset, calculatePermissionHours } from '../lib/utils';
+import { getCairoNow, formatCairoDate, formatCairoTime, calculateDeduction, cn, formatTimeTo12Hour, formatDelayToArabic, formatStringTimeTo12Hour, getCairoOffset, calculatePermissionHours, resolveEffectiveWorkStart, timeStrToMinutes } from '../lib/utils';
 import { Toaster, toast } from 'react-hot-toast';
 import { Clock, Coffee, Send, MapPin, UserCheck, UserX, Sun, Moon, Calendar, X as CloseIcon, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -28,6 +28,94 @@ const getQueryDate = (time: Date) => {
     qDate = formatCairoDate(yesterday);
   }
   return qDate;
+};
+
+// Converts a stored 24-hour "HH:mm" string into 12-hour parts for the
+// TimeOfDayPicker below, and back. Kept in module scope (pure, no component
+// state) so it's cheap to call on every render.
+const timeStrTo12HourParts = (timeStr: string): { hour12: number; minute: number; period: 'AM' | 'PM' } => {
+  const [h, m] = (timeStr || '09:00').split(':').map(Number);
+  const hours24 = isNaN(h) ? 9 : h;
+  const minute = isNaN(m) ? 0 : m;
+  let hour12 = hours24 % 12;
+  if (hour12 === 0) hour12 = 12;
+  const period: 'AM' | 'PM' = hours24 >= 12 ? 'PM' : 'AM';
+  return { hour12, minute, period };
+};
+
+const parts12HourToTimeStr = (hour12: number, minute: number, period: 'AM' | 'PM'): string => {
+  let hours24 = hour12 % 12;
+  if (period === 'PM') hours24 += 12;
+  return `${String(hours24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+};
+
+/**
+ * Explicit 12-hour time-of-day picker with a clearly-labelled صباحًا/مساءً
+ * toggle, used instead of the native <input type="time">.
+ *
+ * We stopped using the native time input for permission requests because in
+ * RTL (Arabic) layout, browsers can render its built-in AM/PM segment in a
+ * visually reversed position, so an employee tapping what looks like "مساءً"
+ * can end up saving "AM" instead - producing a same-day permission that
+ * silently spans into the next day (e.g. "1:00 AM" instead of "1:00 PM").
+ * This picker always stores/returns the same 24-hour "HH:mm" string the rest
+ * of the app already works with (calculatePermissionHours, Firestore, etc.)
+ * - only the input UI changes.
+ */
+const TimeOfDayPicker: React.FC<{
+  label: string;
+  value: string;
+  onChange: (timeStr: string) => void;
+}> = ({ label, value, onChange }) => {
+  const { hour12, minute, period } = timeStrTo12HourParts(value);
+
+  const setHour = (h: number) => onChange(parts12HourToTimeStr(h, minute, period));
+  const setMinute = (m: number) => onChange(parts12HourToTimeStr(hour12, m, period));
+  const setPeriod = (p: 'AM' | 'PM') => onChange(parts12HourToTimeStr(hour12, minute, p));
+
+  const hourOptions = Array.from({ length: 12 }, (_, i) => i + 1);
+  const minuteOptions = Array.from({ length: 60 }, (_, i) => i);
+
+  return (
+    <div className="space-y-2">
+      <label className="text-[10px] text-[#A78BFA] px-3 md:px-4 font-black uppercase tracking-widest">{label}</label>
+      <div className="flex items-center gap-2" dir="ltr">
+        <select
+          value={hour12}
+          onChange={e => setHour(Number(e.target.value))}
+          className="flex-1 bg-white/5 border border-white/10 rounded-2xl py-4 md:py-5 px-2 text-white text-lg md:text-xl font-black outline-none focus:border-[#C084FC]/50 transition-all font-mono text-center"
+        >
+          {hourOptions.map(h => <option key={h} value={h}>{h}</option>)}
+        </select>
+        <span className="text-white text-lg font-black">:</span>
+        <select
+          value={minute}
+          onChange={e => setMinute(Number(e.target.value))}
+          className="flex-1 bg-white/5 border border-white/10 rounded-2xl py-4 md:py-5 px-2 text-white text-lg md:text-xl font-black outline-none focus:border-[#C084FC]/50 transition-all font-mono text-center"
+        >
+          {minuteOptions.map(m => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
+        </select>
+        <div className="flex rounded-2xl overflow-hidden border border-white/10 shrink-0">
+          <button
+            type="button"
+            onClick={() => setPeriod('AM')}
+            className={cn(
+              "px-3 py-4 md:py-5 text-[11px] font-black transition-all",
+              period === 'AM' ? "bg-[#E2B765] text-[#12071F]" : "bg-white/5 text-white/40"
+            )}
+          >صباحًا</button>
+          <button
+            type="button"
+            onClick={() => setPeriod('PM')}
+            className={cn(
+              "px-3 py-4 md:py-5 text-[11px] font-black transition-all",
+              period === 'PM' ? "bg-[#E2B765] text-[#12071F]" : "bg-white/5 text-white/40"
+            )}
+          >مساءً</button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export const EmployeePortal: React.FC = () => {
@@ -250,21 +338,17 @@ export const EmployeePortal: React.FC = () => {
       } else {
         normalStartTime = effectiveSettings.morningStartTime || "09:00";
       }
-      effectiveSettings.workStartTime = normalStartTime;
-      
-      let permissionApplied = false;
-      
-      if (approvedPermission) {
-        const permFrom = approvedPermission.fromTime || "09:00";
-        const permTo = approvedPermission.toTime || "11:00";
-        
-        // If the permission starts at or before normal workStartTime, it's a morning permission
-        if (permFrom <= normalStartTime) {
-          effectiveSettings.workStartTime = permTo;
-          permissionApplied = true;
-        }
-      }
-      
+
+      // effective work start = permission end time, but ONLY for a "morning
+      // permission" (one that starts at or before the normal shift start).
+      // Shared with attendanceUtils.ts and dataHealer.ts via
+      // resolveEffectiveWorkStart so every recalculation path agrees.
+      const { workStartTime, permissionApplied } = resolveEffectiveWorkStart(
+        normalStartTime,
+        approvedPermission ? { fromTime: approvedPermission.fromTime, toTime: approvedPermission.toTime } : null
+      );
+      effectiveSettings.workStartTime = workStartTime;
+
       const { delayMinutes, deduction, reason } = calculateDeduction(timeStr, effectiveSettings);
       
       const attendanceData: Attendance = {
@@ -317,6 +401,25 @@ export const EmployeePortal: React.FC = () => {
     
     setIsSubmitting(true);
     try {
+      // Guard against an obviously-wrong AM/PM entry in the permission time
+      // inputs (e.g. the employee means "1:00 PM" but the native time picker
+      // is still on AM, saving "01:00" instead of "13:00"). A same-day
+      // permission longer than this is never legitimate, so treat it as a
+      // likely AM/PM mistake and ask the employee to double-check instead of
+      // silently saving a value that will produce a huge, wrong delay later.
+      const MAX_REASONABLE_PERMISSION_HOURS = 8;
+      if (selectedRequest.type === 'permission') {
+        const computedHours = calculatePermissionHours(requestForm.fromTime, requestForm.toTime);
+        if (computedHours > MAX_REASONABLE_PERMISSION_HOURS) {
+          toast.error(
+            `مدة الإذن المحسوبة ${computedHours} ساعة، وده غير منطقي لإذن في نفس اليوم. ` +
+            `يرجى مراجعة وقتي "من" و"إلى" والتأكد إنهم مضبوطين صباحًا/مساءً بشكل صحيح.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const requestData: LeaveRequest = {
         userId: profile.id,
         roleCode: profile.roleCode,
@@ -712,7 +815,7 @@ export const EmployeePortal: React.FC = () => {
                     : (settings?.morningStartTime || "09:00");
                   const permFrom = approvedPermission.fromTime || "09:00";
                   const permTo = approvedPermission.toTime || "11:00";
-                  const isMorningPermission = permFrom <= normalStartTime;
+                  const isMorningPermission = timeStrToMinutes(permFrom) <= timeStrToMinutes(normalStartTime);
                   
                   if (isMorningPermission) {
                     return (
@@ -903,27 +1006,31 @@ export const EmployeePortal: React.FC = () => {
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-4 md:gap-8">
-                        <div className="space-y-2">
-                          <label className="text-[10px] text-[#A78BFA] px-3 md:px-4 font-black uppercase tracking-widest">من الساعة</label>
-                          <input 
-                            type="time"
-                            required
-                            value={requestForm.fromTime}
-                            onChange={e => setRequestForm({...requestForm, fromTime: e.target.value})}
-                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 md:py-5 px-4 md:px-6 text-white text-lg md:text-xl font-black outline-none focus:border-[#C084FC]/50 transition-all font-mono"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[10px] text-[#A78BFA] px-3 md:px-4 font-black uppercase tracking-widest">إلى الساعة</label>
-                          <input 
-                            type="time"
-                            required
-                            value={requestForm.toTime}
-                            onChange={e => setRequestForm({...requestForm, toTime: e.target.value})}
-                            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 md:py-5 px-4 md:px-6 text-white text-lg md:text-xl font-black outline-none focus:border-[#C084FC]/50 transition-all font-mono"
-                          />
-                        </div>
+                        <TimeOfDayPicker
+                          label="من الساعة"
+                          value={requestForm.fromTime}
+                          onChange={v => setRequestForm({ ...requestForm, fromTime: v })}
+                        />
+                        <TimeOfDayPicker
+                          label="إلى الساعة"
+                          value={requestForm.toTime}
+                          onChange={v => setRequestForm({ ...requestForm, toTime: v })}
+                        />
                       </div>
+                      {(() => {
+                        const previewHours = calculatePermissionHours(requestForm.fromTime, requestForm.toTime);
+                        const looksSuspicious = previewHours > 8;
+                        return (
+                          <p className={cn(
+                            "text-[11px] font-bold px-3 md:px-4 leading-relaxed",
+                            looksSuspicious ? "text-rose-400" : "text-white/40"
+                          )} dir="rtl">
+                            {looksSuspicious
+                              ? `⚠️ المدة المحسوبة ${previewHours} ساعة - تأكد إن "إلى الساعة" مضبوطة صباحًا/مساءً بشكل صحيح.`
+                              : `مدة الإذن: ${previewHours} ساعة`}
+                          </p>
+                        );
+                      })()}
                     </>
                   ) : (
                     <div className="space-y-6 md:space-y-8">

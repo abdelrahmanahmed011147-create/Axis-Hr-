@@ -331,6 +331,26 @@ export const EvaluationsView: React.FC = () => {
   const [editingEvaluationId, setEditingEvaluationId] = useState<string | null>(null);
   const [viewingHistoryEvaluation, setViewingHistoryEvaluation] = useState<EmployeeEvaluation | null>(null);
 
+  // Root cause of the "values bleed between employees" bug: formScores/
+  // formTechNotes/formHrNotes/formShowToEmployee above are single shared
+  // fields the whole Quick Evaluation form reads/writes, and they were only
+  // ever reset when the KPI criteria set changed (i.e. when the managed
+  // department changed) - never when the EMPLOYEE dropdown changed. Two
+  // employees in the same department share the same criteria set, so
+  // switching between them left the previous employee's typed-in values on
+  // screen. formDraftsByEmployee is purely local, in-memory scratch state
+  // (nothing is written to Firestore here) that stashes each employee's
+  // not-yet-officially-saved values by their real employee id, so the
+  // dropdown can freely move between employees without losing or mixing up
+  // anyone's numbers. Only "تسجيل التقييم" (handleSubmitEvaluation) persists
+  // anything for real.
+  const [formDraftsByEmployee, setFormDraftsByEmployee] = useState<Record<string, {
+    scores: Record<string, number>;
+    techNotes: string;
+    hrNotes: string;
+    showToEmployee: boolean;
+  }>>({});
+
   // KPI Settings states
   const [editingDept, setEditingDept] = useState('');
   const [editingCriteria, setEditingCriteria] = useState<KPICriterion[]>([]);
@@ -509,6 +529,78 @@ export const EvaluationsView: React.FC = () => {
     }
   }, [activeKpiSubset, editingEvaluationId]);
 
+  const buildDefaultFormScores = React.useCallback(() => {
+    const defaults: Record<string, number> = {};
+    activeKpiSubset.forEach(crit => { defaults[crit.name] = 0; });
+    return defaults;
+  }, [activeKpiSubset]);
+
+  // Snapshots whatever is currently typed into the form under the
+  // currently-selected employee's id, so it isn't lost when the dropdown
+  // moves to someone else. No-op if no employee is currently selected.
+  const stashCurrentEmployeeDraft = (
+    currentDrafts: typeof formDraftsByEmployee
+  ): typeof formDraftsByEmployee => {
+    if (!formEmployeeId) return currentDrafts;
+    return {
+      ...currentDrafts,
+      [formEmployeeId]: {
+        scores: formScores,
+        techNotes: formTechNotes,
+        hrNotes: formHrNotes,
+        showToEmployee: formShowToEmployee,
+      },
+    };
+  };
+
+  // Employee dropdown handler for the Quick Evaluation form. Stashes the
+  // outgoing employee's in-progress values, then restores the newly-selected
+  // employee's own draft if one exists, or a fresh empty one otherwise.
+  // Switching employees here never touches Firestore - only
+  // handleSubmitEvaluation ("تسجيل التقييم") does.
+  const handleSelectFormEmployee = (newEmployeeId: string) => {
+    if (newEmployeeId === formEmployeeId) return;
+
+    const updatedDrafts = stashCurrentEmployeeDraft(formDraftsByEmployee);
+    setFormDraftsByEmployee(updatedDrafts);
+    setFormEmployeeId(newEmployeeId);
+
+    if (!newEmployeeId) {
+      setFormScores({});
+      setFormTechNotes('');
+      setFormHrNotes('');
+      setFormShowToEmployee(true);
+      return;
+    }
+
+    const existingDraft = updatedDrafts[newEmployeeId];
+    if (existingDraft) {
+      setFormScores(existingDraft.scores);
+      setFormTechNotes(existingDraft.techNotes);
+      setFormHrNotes(existingDraft.hrNotes);
+      setFormShowToEmployee(existingDraft.showToEmployee);
+    } else {
+      setFormScores(buildDefaultFormScores());
+      setFormTechNotes('');
+      setFormHrNotes('');
+      setFormShowToEmployee(true);
+    }
+  };
+
+  // Department dropdown handler. Changing the managed department also
+  // deselects the employee (existing behavior), so stash that employee's
+  // draft first instead of silently discarding it. formScores itself is
+  // reset by the activeKpiSubset effect above once the new department's
+  // criteria load.
+  const handleSelectFormDept = (newDept: string) => {
+    setFormDraftsByEmployee(stashCurrentEmployeeDraft(formDraftsByEmployee));
+    setFormDept(newDept);
+    setFormEmployeeId('');
+    setFormTechNotes('');
+    setFormHrNotes('');
+    setFormShowToEmployee(true);
+  };
+
   // Compute live weighted score out of 100 for current input scores
   const formTotalPercentage = React.useMemo(() => {
     if (activeKpiSubset.length === 0) return 0;
@@ -674,6 +766,7 @@ export const EvaluationsView: React.FC = () => {
       setFormHrNotes('');
       setFormShowToEmployee(true);
       setEditingEvaluationId(null);
+      setFormDraftsByEmployee({});
       setSubTab('all');
     } catch (err: any) {
       toast.error(`حدث خطأ أثناء حفظ التقييم: ${err.message}`, {
@@ -1415,6 +1508,7 @@ export const EvaluationsView: React.FC = () => {
                     setFormTechNotes('');
                     setFormHrNotes('');
                     setFormShowToEmployee(true);
+                    setFormDraftsByEmployee({});
                   }}
                   className="bg-white/5 hover:bg-white/10 text-[#A78BFA] p-2.5 rounded-xl border border-white/5 transition-colors"
                 >
@@ -1429,10 +1523,7 @@ export const EvaluationsView: React.FC = () => {
                   <select
                     value={formDept}
                     disabled={!!editingEvaluationId}
-                    onChange={(e) => {
-                      setFormDept(e.target.value);
-                      setFormEmployeeId(''); // Reset employee
-                    }}
+                    onChange={(e) => handleSelectFormDept(e.target.value)}
                     className="w-full bg-[#12071F] text-white border border-white/10 text-xs px-3.5 py-3 rounded-2xl focus:border-[#E2B765] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option value="">-- اختر القسم --</option>
@@ -1447,7 +1538,7 @@ export const EvaluationsView: React.FC = () => {
                   <label className="text-xs text-[#A78BFA] font-black uppercase tracking-wider block">2. اختر اسم الموظف</label>
                   <select
                     value={formEmployeeId}
-                    onChange={(e) => setFormEmployeeId(e.target.value)}
+                    onChange={(e) => handleSelectFormEmployee(e.target.value)}
                     disabled={!formDept || !!editingEvaluationId}
                     className="w-full bg-[#12071F] text-white border border-white/10 text-xs px-3.5 py-3 rounded-2xl focus:border-[#E2B765] focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   >

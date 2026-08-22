@@ -389,12 +389,79 @@ export const AttendanceLogsView: React.FC = () => {
     };
   };
 
+  // Returns every "YYYY-MM-DD" calendar date from start to end (inclusive),
+  // used below to find working days with no attendance document so they can
+  // be displayed as "غياب" in the per-employee detail view. Does all
+  // arithmetic in a fixed UTC frame (Date.UTC + getUTC* accessors) rather
+  // than local Date getters, so the result never shifts by a day depending
+  // on the browser/server's local timezone - "2026-08-18" in, "2026-08-18"
+  // out, always.
+  const getDateRangeArray = (start: string, end: string): string[] => {
+    if (!start || !end) return [];
+    const [sy, sm, sd] = start.split('-').map(Number);
+    const [ey, em, ed] = end.split('-').map(Number);
+    if ([sy, sm, sd, ey, em, ed].some(n => isNaN(n))) return [];
+
+    const dates: string[] = [];
+    let cursor = Date.UTC(sy, sm - 1, sd);
+    const endTime = Date.UTC(ey, em - 1, ed);
+    while (cursor <= endTime) {
+      const d = new Date(cursor);
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      dates.push(`${y}-${m}-${day}`);
+      cursor += 24 * 60 * 60 * 1000;
+    }
+    return dates;
+  };
+
   const selectedEmployee = selectedEmployeeId ? employees.find(e => e.id === selectedEmployeeId) : null;
-  const selectedEmployeeLogs = selectedEmployee ? {
-    employee: selectedEmployee,
-    stats: getEmployeeStats(selectedEmployee.roleCode, selectedEmployee.id),
-    logs: getEmployeeStats(selectedEmployee.roleCode, selectedEmployee.id).logs
-  } : null;
+  const selectedEmployeeLogs = selectedEmployee ? (() => {
+    const stats = getEmployeeStats(selectedEmployee.roleCode, selectedEmployee.id);
+
+    // Derive missing working days within the selected [startDate, endDate]
+    // range as "غياب" for display only - reuses the exact same
+    // getEmployeeDailyStatus resolver as the Daily Logs tab above, so
+    // "absent" means the same thing in both places. An existing attendance
+    // document always wins inside getEmployeeDailyStatus, so real logs here
+    // are never turned into "absent"; and only dates it classifies with the
+    // true past-tense "غائب" label are added (not "لم يحضر بعد" for today or
+    // "لم يبدأ الدوام بعد" for future dates, which aren't absences yet).
+    // Nothing is written to Firestore - these are plain in-memory display
+    // rows only, tagged with isDerivedAbsence so the render below can tell
+    // them apart from real attendance documents (and skip the "edit
+    // deduction" action for them, since there's no real document to edit).
+    const derivedAbsences: (Attendance & { isDerivedAbsence: true })[] = [];
+    if (startDate && endDate) {
+      getDateRangeArray(startDate, endDate).forEach(date => {
+        const status = getEmployeeDailyStatus(selectedEmployee, date);
+        if (status.type === 'absent' && status.label === 'غائب') {
+          derivedAbsences.push({
+            id: `absent-${selectedEmployee.id}-${date}`,
+            userId: selectedEmployee.id,
+            roleCode: selectedEmployee.roleCode,
+            date,
+            checkInTime: null,
+            delayMinutes: 0,
+            deductionValue: 0,
+            deductionReason: '',
+            status: 'Absent',
+            createdAt: null,
+            isDerivedAbsence: true,
+          } as Attendance & { isDerivedAbsence: true });
+        }
+      });
+    }
+
+    const combinedLogs = [...stats.logs, ...derivedAbsences].sort((a, b) => b.date.localeCompare(a.date));
+
+    return {
+      employee: selectedEmployee,
+      stats,
+      logs: combinedLogs
+    };
+  })() : null;
 
   const handleSaveDeduction = async () => {
     if (!editingLog || !editingLog.id) {
@@ -1828,9 +1895,13 @@ export const AttendanceLogsView: React.FC = () => {
                             <div>
                               <span className={cn(
                                 "text-[10px] font-black px-2.5 py-0.5 rounded-full",
-                                log.status === 'Late' ? "bg-rose-500/10 text-rose-400 border border-rose-500/20" : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                log.status === 'Absent'
+                                  ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                  : log.status === 'Late'
+                                    ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                    : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                               )}>
-                                {log.status === 'Late' ? 'متأخر' : 'في الموعد'}
+                                {log.status === 'Absent' ? 'غياب' : log.status === 'Late' ? 'متأخر' : 'في الموعد'}
                               </span>
                             </div>
                           </div>
@@ -1865,7 +1936,7 @@ export const AttendanceLogsView: React.FC = () => {
                                     </div>
                                   ) : 'لا يوجد'}
                                 </div>
-                                {isAdmin && (
+                                {isAdmin && !(log as any).isDerivedAbsence && (
                                   <button
                                     onClick={() => {
                                       setEditingLog(log);

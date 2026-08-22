@@ -18,7 +18,8 @@ import {
   HelpCircle,
   Info
 } from 'lucide-react';
-import { cn, formatTimeTo12Hour, formatDelayToArabic, calculatePermissionHours } from '../lib/utils';
+import { cn, formatTimeTo12Hour, formatDelayToArabic, calculatePermissionHours, formatCairoDate } from '../lib/utils';
+import { getEmployeeDailyStatus, getDateRangeArray } from '../lib/attendanceUtils';
 import { motion } from 'motion/react';
 import { toast } from 'react-hot-toast';
 
@@ -113,7 +114,68 @@ export const EmployeeAttendanceView: React.FC = () => {
     });
   };
 
+  // The [start, end] calendar range the currently-selected filter covers, so
+  // missing working days within it can be derived as "غياب" below. "all" has
+  // no natural bound (and the HR "عرض التفاصيل" equivalent only ever derives
+  // absence for an explicit bounded range too), so it's intentionally left
+  // out - only the raw logged attendance documents are shown for "all".
+  const getFilterDateRange = (): { start: string; end: string } | null => {
+    const now = new Date();
+    if (dateFilter === 'current') {
+      const start = formatCairoDate(new Date(now.getFullYear(), now.getMonth(), 1));
+      const end = formatCairoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      return { start, end };
+    }
+    if (dateFilter === 'last') {
+      const targetYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const targetMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+      const start = formatCairoDate(new Date(targetYear, targetMonth, 1));
+      const end = formatCairoDate(new Date(targetYear, targetMonth + 1, 0));
+      return { start, end };
+    }
+    return null;
+  };
+
   const filteredLogs = getFilteredLogs();
+
+  // Derive missing working days within the current filter's date range as
+  // "غياب" for display only - reuses the exact same getEmployeeDailyStatus
+  // resolver the Admin/HR attendance views use, so "absent" means the same
+  // thing everywhere in the app. An existing attendance document always wins
+  // inside getEmployeeDailyStatus, so a real check-in is never turned into
+  // absent; and only dates it classifies with the true past-tense "غائب"
+  // label are added here (not "لم يحضر بعد" for today or "لم يبدأ الدوام بعد"
+  // for future dates, which aren't absences yet). Nothing is written to
+  // Firestore - these are plain in-memory display rows only.
+  const combinedLogs = React.useMemo(() => {
+    if (!profile) return filteredLogs;
+    const range = getFilterDateRange();
+    if (!range) return filteredLogs;
+
+    const derivedAbsences: (Attendance & { isDerivedAbsence: true })[] = [];
+    getDateRangeArray(range.start, range.end).forEach(date => {
+      const status = getEmployeeDailyStatus(profile, date, attendance, requests);
+      if (status.type === 'absent' && status.label === 'غائب') {
+        derivedAbsences.push({
+          id: `absent-${profile.id}-${date}`,
+          userId: profile.id,
+          roleCode: profile.roleCode,
+          date,
+          checkInTime: null,
+          delayMinutes: 0,
+          deductionValue: 0,
+          deductionReason: '',
+          status: 'Absent',
+          createdAt: null,
+          isDerivedAbsence: true,
+        });
+      }
+    });
+
+    if (derivedAbsences.length === 0) return filteredLogs;
+    return [...filteredLogs, ...derivedAbsences].sort((a, b) => b.date.localeCompare(a.date));
+  }, [filteredLogs, profile, attendance, requests, dateFilter]);
+
 
   const getVacationDurationDays = (req: LeaveRequest) => {
     if (!req.fromDate || !req.toDate) return 1;
@@ -451,7 +513,7 @@ export const EmployeeAttendanceView: React.FC = () => {
             <h4 className="text-xl font-black">سجل حركات الحضور والإنصراف التفصيلي</h4>
           </div>
           <span className="text-xs text-[#A78BFA] bg-white/5 px-4 py-2 rounded-xl border border-white/5 font-medium">
-             عرض {filteredLogs.length} حركة مسجلة
+             عرض {combinedLogs.length} حركة مسجلة
           </span>
         </div>
 
@@ -469,7 +531,7 @@ export const EmployeeAttendanceView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredLogs.length === 0 ? (
+              {combinedLogs.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-24 text-center">
                     <div className="max-w-md mx-auto space-y-4">
@@ -480,7 +542,8 @@ export const EmployeeAttendanceView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredLogs.map((log) => {
+                combinedLogs.map((log) => {
+                  const isAbsent = log.status === 'Absent';
                   const checkInDate = log.checkInTime?.toDate ? log.checkInTime.toDate() : (log.checkInTime?.seconds ? new Date(log.checkInTime.seconds * 1000) : null);
                   const checkOutDate = log.checkOutTime?.toDate ? log.checkOutTime.toDate() : (log.checkOutTime?.seconds ? new Date(log.checkOutTime.seconds * 1000) : null);
 
@@ -512,6 +575,8 @@ export const EmployeeAttendanceView: React.FC = () => {
                           <span className="font-sans text-white text-md font-semibold bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg">
                             {formatTimeTo12Hour(checkOutDate)}
                           </span>
+                        ) : isAbsent ? (
+                          <span className="text-[#A78BFA]/45">--:--</span>
                         ) : (
                           <span className="text-rose-400 font-bold bg-rose-500/5 border border-rose-500/10 px-3 py-1.5 rounded-lg text-xs">معلق</span>
                         )}
@@ -519,12 +584,18 @@ export const EmployeeAttendanceView: React.FC = () => {
 
                       {/* Status */}
                       <td className="py-6 px-6 text-center">
-                        <span className={cn(
-                          "text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter",
-                          (log.delayMinutes || 0) > 0 ? "bg-orange-500/10 text-orange-400" : "bg-emerald-500/10 text-emerald-400"
-                        )}>
-                          {(log.delayMinutes || 0) > 0 ? 'متأخر' : 'في الموعد'}
-                        </span>
+                        {isAbsent ? (
+                          <span className="text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter bg-rose-500/10 text-rose-400">
+                            غياب
+                          </span>
+                        ) : (
+                          <span className={cn(
+                            "text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter",
+                            (log.delayMinutes || 0) > 0 ? "bg-orange-500/10 text-orange-400" : "bg-emerald-500/10 text-emerald-400"
+                          )}>
+                            {(log.delayMinutes || 0) > 0 ? 'متأخر' : 'في الموعد'}
+                          </span>
+                        )}
                       </td>
 
                       {/* Delay Minutes */}
@@ -556,7 +627,11 @@ export const EmployeeAttendanceView: React.FC = () => {
 
                       {/* Deduction Reason / Remarks */}
                       <td className="py-6 px-8 text-right">
-                        {log.deductionReason ? (
+                        {isAbsent ? (
+                          <p className="text-xs text-rose-400 font-medium italic border-r-2 border-rose-500/30 pr-3 leading-relaxed">
+                            لا يوجد سجل حضور، ولا إجازة أو إذن معتمد لهذا اليوم
+                          </p>
+                        ) : log.deductionReason ? (
                           <p className="text-xs text-[#A78BFA] font-medium italic border-r-2 border-[#7C3AED]/30 pr-3 leading-relaxed">
                             {log.deductionReason}
                           </p>

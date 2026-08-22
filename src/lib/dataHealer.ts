@@ -1,6 +1,7 @@
 import { collection, getDocs, doc, writeBatch, getDoc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { calculateDeduction, formatCairoTime, formatCairoDate } from './utils';
+import { calculateDeduction, formatCairoTime, formatCairoDate, resolveEffectiveWorkStart, calculatePermissionHours } from './utils';
+import { recalculateAttendanceForUserAndDate } from './attendanceUtils';
 
 const getCheckInDate = (checkInTime: any) => {
   if (!checkInTime) return null;
@@ -324,19 +325,23 @@ export async function recalculateAllAttendanceLogs(): Promise<number> {
       });
 
       let effectiveSettings = { ...settings };
-      const normalStartTime = effectiveSettings.workStartTime || "09:00";
-      let permissionApplied = false;
+      // Use the employee's actual shift start time (morning/evening), same as
+      // attendanceUtils.ts and EmployeePortal.tsx. The previous version of
+      // this function fell back to a generic `settings.workStartTime` field
+      // that the Settings screen never actually persists (it only saves
+      // `morningStartTime`/`eveningStartTime`), so it was silently always
+      // using the "09:00" fallback here regardless of shift - out of sync
+      // with the other two recalculation paths.
+      const currentShift = attData.shift || 'morning';
+      const normalStartTime = currentShift === 'evening'
+        ? (effectiveSettings.eveningStartTime || "12:00")
+        : (effectiveSettings.morningStartTime || "09:00");
 
-      if (activePermission) {
-        const permFrom = activePermission.fromTime || "09:00";
-        const permTo = activePermission.toTime || "11:00";
-
-        // If the permission starts at or before normal workStartTime, it's a morning permission
-        if (permFrom <= normalStartTime) {
-          effectiveSettings.workStartTime = permTo;
-          permissionApplied = true;
-        }
-      }
+      const { workStartTime, permissionApplied } = resolveEffectiveWorkStart(
+        normalStartTime,
+        activePermission ? { fromTime: activePermission.fromTime, toTime: activePermission.toTime } : null
+      );
+      effectiveSettings.workStartTime = workStartTime;
 
       const timeStr = formatCairoTime(checkInDate, 'HH:mm');
       const { delayMinutes, deduction, reason } = calculateDeduction(timeStr, effectiveSettings);
@@ -515,5 +520,131 @@ export async function healSpecificAttendanceForNadaAndZahra(): Promise<{ success
   } catch (err: any) {
     console.error(err);
     return { success: false, message: `فشل التعديل: ${err.message || String(err)}` };
+  }
+}
+
+/**
+ * A permission request ("إذن") flagged as suspicious by
+ * auditSuspiciousPermissionRequests - almost always caused by an AM/PM entry
+ * mistake (e.g. "1:00 AM" saved instead of "1:00 PM").
+ */
+export interface SuspiciousPermissionRequest {
+  id: string;
+  userId?: string;
+  roleCode?: string;
+  date?: string;
+  fromTime: string;
+  toTime: string;
+  hours: number;
+  /**
+   * A same-day permission longer than this is treated as implausible.
+   * Kept in sync with the MAX_REASONABLE_PERMISSION_HOURS guard in
+   * EmployeePortal.tsx's request form.
+   */
+  suggestedToTime: string | null;
+}
+
+const MAX_REASONABLE_PERMISSION_HOURS = 8;
+
+/**
+ * Scans every 'permission' request in the 'requests' collection and flags
+ * any whose computed duration (calculatePermissionHours(fromTime, toTime))
+ * is longer than a same-day permission can reasonably be. This is a
+ * read-only audit - it does NOT change any data. Use it to find existing
+ * records affected by the AM/PM entry bug described in EmployeePortal.tsx's
+ * TimeOfDayPicker, so they can be reviewed and fixed one by one with
+ * fixPermissionRequestToTime below.
+ *
+ * For each flagged request, `suggestedToTime` is a best-guess correction:
+ * if simply adding 12 hours to `toTime` would bring the duration back under
+ * the threshold, that's suggested (the classic "AM instead of PM" case).
+ * Otherwise `suggestedToTime` is null and the record needs manual review -
+ * this function never guesses blindly and never writes anything.
+ */
+export async function auditSuspiciousPermissionRequests(): Promise<SuspiciousPermissionRequest[]> {
+  const reqSnap = await getDocs(collection(db, 'requests'));
+  const flagged: SuspiciousPermissionRequest[] = [];
+
+  reqSnap.docs.forEach(d => {
+    const data = d.data() as any;
+    if (data.type !== 'permission') return;
+
+    const fromTime = data.fromTime || '09:00';
+    const toTime = data.toTime || '11:00';
+    const hours = calculatePermissionHours(fromTime, toTime);
+
+    if (hours > MAX_REASONABLE_PERMISSION_HOURS) {
+      // Try the "+12 hours" AM/PM-flip correction and see if it lands in a
+      // sane range. E.g. fromTime "09:00", toTime "01:00" (meant "13:00"):
+      // shifting toTime's hour by 12 gives "13:00", duration 4h - sane.
+      const [toH, toM] = toTime.split(':').map(Number);
+      let suggestedToTime: string | null = null;
+      if (!isNaN(toH) && !isNaN(toM) && toH < 12) {
+        const candidate = `${String(toH + 12).padStart(2, '0')}:${String(toM).padStart(2, '0')}`;
+        const candidateHours = calculatePermissionHours(fromTime, candidate);
+        if (candidateHours > 0 && candidateHours <= MAX_REASONABLE_PERMISSION_HOURS) {
+          suggestedToTime = candidate;
+        }
+      }
+
+      flagged.push({
+        id: d.id,
+        userId: data.userId,
+        roleCode: data.roleCode,
+        date: data.date,
+        fromTime,
+        toTime,
+        hours,
+        suggestedToTime,
+      });
+    }
+  });
+
+  return flagged;
+}
+
+/**
+ * Applies a corrected `toTime` to a single permission request (typically one
+ * returned by auditSuspiciousPermissionRequests), updates its stored `hours`
+ * field to match, and triggers a recalculation of that user's attendance for
+ * that date so delayMinutes/deductionValue on the attendance record are
+ * fixed too. This intentionally fixes ONE record at a time rather than
+ * bulk-rewriting payroll-affecting data automatically - review each
+ * suggestion before applying it.
+ */
+export async function fixPermissionRequestToTime(
+  requestId: string,
+  correctedToTime: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const reqRef = doc(db, 'requests', requestId);
+    const reqSnap = await getDoc(reqRef);
+    if (!reqSnap.exists()) {
+      return { success: false, message: 'لم يتم العثور على طلب الإذن.' };
+    }
+    const data = reqSnap.data() as any;
+    if (data.type !== 'permission') {
+      return { success: false, message: 'هذا الطلب ليس طلب إذن.' };
+    }
+
+    const fromTime = data.fromTime || '09:00';
+    const newHours = calculatePermissionHours(fromTime, correctedToTime);
+
+    await updateDoc(reqRef, {
+      toTime: correctedToTime,
+      hours: newHours,
+    });
+
+    if (data.userId && data.date) {
+      await recalculateAttendanceForUserAndDate(data.userId, data.date);
+    }
+
+    return {
+      success: true,
+      message: `تم تصحيح وقت الانتهاء إلى ${correctedToTime} (${newHours} ساعة) وإعادة حساب الحضور بنجاح.`,
+    };
+  } catch (err: any) {
+    console.error('Error in fixPermissionRequestToTime:', err);
+    return { success: false, message: `فشل التصحيح: ${err.message || String(err)}` };
   }
 }
