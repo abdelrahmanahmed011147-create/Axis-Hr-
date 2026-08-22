@@ -248,7 +248,15 @@ export const AttendanceLogsView: React.FC = () => {
   useEffect(() => {
     if (!isAdmin) return;
     const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
-      setEmployees(snap.docs.map(d => ({ id: d.id, ...d.data() } as Employee)).filter(e => isEmployeeEnabled(e)));
+      setEmployees(
+        snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as Employee))
+          // exclude preserved migration backups - same convention already
+          // used in AdminDashboard.tsx/CompanyDashboard.tsx. Without this,
+          // an employee who was migrated to a new account shows up twice:
+          // once as their old (migrated) document and once as their new one.
+          .filter(e => isEmployeeEnabled(e) && !(e as any).migrated)
+      );
     });
 
     const unsubSettings = onSnapshot(doc(db, 'settings', 'system_config'), (snap) => {
